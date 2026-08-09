@@ -1,14 +1,13 @@
 import './App.css'
 
 function App() {
+  const name = "VAAS User"
   return (
-  <div>
-    <h1>🤖 VAAS</h1>
-    <h2>Virtual AI Assistant System</h2>
-    <p>Your intelligent AI companion.</p>
-    <button>Start Chat</button>
-  </div>
-)
+    <div className="app">
+      <h1>Welcome to VAAS {name}</h1>
+      <p>Ask questions. Get intelligent answers.</p>
+      <button className="button">Ask VAAS</button>
+    </div>
+  )
 }
-
 export default App
