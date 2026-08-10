@@ -1,39 +1,21 @@
-import './App.css'
-
-function Message({ sender, text }) {
-  return (
-    <div>
-      <h3>{sender}</h3>
-      <p>{text}</p>
-    </div>
-  )
-}
+import { useState } from "react"
 
 function App() {
+  const [messageCount, setMessageCount] = useState(0)
+
+  function sendMessage() {
+    setMessageCount(prev => prev + 1)
+  }
+
   return (
     <div>
       <h1>VAAS</h1>
-      <p>Virtual AI Assistant System</p>
 
-      <Message
-        sender="Vishnu"
-        text="Explain binary search"
-      />
+      <p>Messages: {messageCount}</p>
 
-      <Message
-        sender="VAAS"
-        text="Binary search works on a sorted array."
-      />
-
-      <Message
-        sender="Vishnu"
-        text="Give me an example."
-      />
-
-      <Message
-        sender="VAAS"
-        text="Sure! Let's take a sorted array."
-      />
+      <button onClick={sendMessage}>
+        Send Message
+      </button>
     </div>
   )
 }
