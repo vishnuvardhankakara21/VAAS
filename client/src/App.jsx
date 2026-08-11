@@ -1,21 +1,34 @@
 import { useState } from "react"
 
 function App() {
-  const [messageCount, setMessageCount] = useState(0)
+  const [message, setMessage] = useState("")
+  const [sentMessage, setSentMessage] = useState("")
+
+  function handleChange(event) {
+    setMessage(event.target.value)
+  }
 
   function sendMessage() {
-    setMessageCount(prev => prev + 1)
+    setSentMessage(message)
+    setMessage("")
   }
 
   return (
     <div>
       <h1>VAAS</h1>
 
-      <p>Messages: {messageCount}</p>
+      <input
+        value={message}
+        onChange={handleChange}
+        placeholder="Ask VAAS something..."
+      />
 
       <button onClick={sendMessage}>
-        Send Message
+        Send
       </button>
+
+      <p>Currently typing: {message}</p>
+      <p>Sent message: {sentMessage}</p>
     </div>
   )
 }
