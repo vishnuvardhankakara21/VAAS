@@ -2,20 +2,30 @@ import { useState } from "react"
 
 function App() {
   const [message, setMessage] = useState("")
-  const [sentMessage, setSentMessage] = useState("")
+  const [messages, setMessages] = useState([])
 
   function handleChange(event) {
     setMessage(event.target.value)
   }
 
   function sendMessage() {
-    setSentMessage(message)
+    if (message.trim() === "") {
+      return
+    }
+
+    setMessages(prevMessages => [...prevMessages, message])
     setMessage("")
   }
 
   return (
     <div>
       <h1>VAAS</h1>
+
+      <div>
+        {messages.map((message, index) => (
+          <p key={index}>You: {message}</p>
+        ))}
+      </div>
 
       <input
         value={message}
@@ -26,9 +36,6 @@ function App() {
       <button onClick={sendMessage}>
         Send
       </button>
-
-      <p>Currently typing: {message}</p>
-      <p>Sent message: {sentMessage}</p>
     </div>
   )
 }
