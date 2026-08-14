@@ -5,24 +5,27 @@ function App() {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [response, setResponse] = useState("")
+
   function handleChange(event) {
     setMessage(event.target.value)
   }
 
-  function sendMessage() {
-  if (message.trim() === "") {
-    return
+  function sendMessage(event) {
+    event.preventDefault()
+
+    if (message.trim() === "" || isLoading) {
+      return
+    }
+
+    setMessages(prevMessages => [...prevMessages, message])
+    setMessage("")
+    setIsLoading(true)
+
+    setTimeout(() => {
+      setResponse("Hello! I am VAAS. How can I help you?")
+      setIsLoading(false)
+    }, 1500)
   }
-
-  setMessages(prevMessages => [...prevMessages, message])
-  setMessage("")
-  setIsLoading(true)
-
-  setTimeout(() => {
-    setResponse("Hello! I am VAAS. How can I help you?")
-    setIsLoading(false)
-  }, 1500)
-}
 
   return (
     <div>
@@ -37,17 +40,22 @@ function App() {
           ))}
         </div>
       )}
-       {isLoading && <p>VAAS is thinking...</p>}
-       {response && <p>VAAS: {response}</p>}
-      <input
-        value={message}
-        onChange={handleChange}
-        placeholder="Ask VAAS something..."
-      />
 
-      <button onClick={sendMessage}>
-        Send
-      </button>
+      {isLoading && <p>VAAS is thinking...</p>}
+
+      {response && <p>VAAS: {response}</p>}
+
+      <form onSubmit={sendMessage}>
+        <input
+          value={message}
+          onChange={handleChange}
+          placeholder="Ask VAAS something..."
+        />
+
+        <button type="submit" disabled={isLoading}>
+          Send
+        </button>
+      </form>
     </div>
   )
 }
