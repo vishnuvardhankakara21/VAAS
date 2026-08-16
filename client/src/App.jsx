@@ -1,63 +1,48 @@
-import { useState } from "react"
-
+import { useState } from "react";
+import MessageList from "./components/MessageList";
+import ChatInput from "./components/ChatInput";
+import Loading from "./components/Loading"
 function App() {
-  const [message, setMessage] = useState("")
-  const [messages, setMessages] = useState([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [response, setResponse] = useState("")
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [response, setResponse] = useState("");
 
   function handleChange(event) {
-    setMessage(event.target.value)
+    setMessage(event.target.value);
   }
 
   function sendMessage(event) {
-    event.preventDefault()
+    event.preventDefault();
 
     if (message.trim() === "" || isLoading) {
-      return
+      return;
     }
 
-    setMessages(prevMessages => [...prevMessages, message])
-    setMessage("")
-    setIsLoading(true)
+    setMessages((prevMessages) => [...prevMessages, message]);
+    setMessage("");
+    setIsLoading(true);
 
     setTimeout(() => {
-      setResponse("Hello! I am VAAS. How can I help you?")
-      setIsLoading(false)
-    }, 1500)
+      setResponse("Hello! I am VAAS. How can I help you?");
+      setIsLoading(false);
+    }, 1500);
   }
 
   return (
     <div>
       <h1>VAAS</h1>
-
-      {messages.length === 0 ? (
-        <p>No messages yet. Start chatting with VAAS.</p>
-      ) : (
-        <div>
-          {messages.map((message, index) => (
-            <p key={index}>You: {message}</p>
-          ))}
-        </div>
-      )}
-
-      {isLoading && <p>VAAS is thinking...</p>}
-
+      <MessageList messages={messages} />
+      {isLoading && <Loading />}
       {response && <p>VAAS: {response}</p>}
-
-      <form onSubmit={sendMessage}>
-        <input
-          value={message}
-          onChange={handleChange}
-          placeholder="Ask VAAS something..."
-        />
-
-        <button type="submit" disabled={isLoading}>
-          Send
-        </button>
-      </form>
+      <ChatInput
+        message={message}
+        handleChange={handleChange}
+        sendMessage={sendMessage}
+        isLoading={isLoading}
+      />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
