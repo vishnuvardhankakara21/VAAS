@@ -1,34 +1,31 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import MessageList from "./components/MessageList";
 import ChatInput from "./components/ChatInput";
-import Loading from "./components/Loading"
+import Loading from "./components/Loading";
 function App() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState("");
-
+  useEffect(() => {
+    document.title = `VAAS - ${messages.length} messages`;
+  }, [messages]);
   function handleChange(event) {
     setMessage(event.target.value);
   }
-
   function sendMessage(event) {
     event.preventDefault();
-
     if (message.trim() === "" || isLoading) {
       return;
     }
-
     setMessages((prevMessages) => [...prevMessages, message]);
     setMessage("");
     setIsLoading(true);
-
     setTimeout(() => {
       setResponse("Hello! I am VAAS. How can I help you?");
       setIsLoading(false);
     }, 1500);
   }
-
   return (
     <div>
       <h1>VAAS</h1>
@@ -44,5 +41,4 @@ function App() {
     </div>
   );
 }
-
 export default App;
