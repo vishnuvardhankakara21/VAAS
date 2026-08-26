@@ -6,12 +6,14 @@ function MessageList({ messages }) {
       ) : (
         <div>
           {messages.map((message, index) => (
-            <p key={index}>You: {message}</p>
+            <p key={index}>
+              {message.role === "user" ? "You" : "VAAS"}: {message.content}
+            </p>
           ))}
         </div>
       )}
     </>
-  )
+  );
 }
 
-export default MessageList
+export default MessageList;

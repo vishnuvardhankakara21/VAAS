@@ -6,7 +6,6 @@ function App() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState("");
   useEffect(() => {
     document.title = `VAAS - ${messages.length} messages`;
   }, [messages]);
@@ -18,11 +17,23 @@ function App() {
     if (message.trim() === "" || isLoading) {
       return;
     }
-    setMessages((prevMessages) => [...prevMessages, message]);
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      {
+        role: "user",
+        content: message,
+      },
+    ]);
     setMessage("");
     setIsLoading(true);
     setTimeout(() => {
-      setResponse("Hello! I am VAAS. How can I help you?");
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          role: "assistant",
+          content: "Hello! I am VAAS. How can I help you?",
+        },
+      ]);
       setIsLoading(false);
     }, 1500);
   }
@@ -31,7 +42,6 @@ function App() {
       <h1>VAAS</h1>
       <MessageList messages={messages} />
       {isLoading && <Loading />}
-      {response && <p>VAAS: {response}</p>}
       <ChatInput
         message={message}
         handleChange={handleChange}
