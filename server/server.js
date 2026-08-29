@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { generateAIResponse } from "./services/ai.js";
@@ -30,6 +31,8 @@ app.post("/api/chat", async (req, res) => {
     });
   }
 });
+
+
 
 app.listen(5000, () => {
   console.log("VAAS backend running on port 5000");
