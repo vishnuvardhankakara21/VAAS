@@ -1,28 +1,36 @@
-const express = require("express")
-const cors = require("cors")
-const app = express()
-app.use(cors())
-app.use(express.json())
-const PORT = 5000
+import express from "express";
+import cors from "cors";
+import { generateAIResponse } from "./services/ai.js";
 
-app.get("/", (req, res) => {
-  res.send("VAAS server is running")
-})
+const app = express();
+
+app.use(cors());
+app.use(express.json());
 
 app.get("/api/status", (req, res) => {
   res.json({
-    status: "online",
-    message: "VAAS backend is running"
-  })
-})
+    message: "Backend is connected to VAAS",
+  });
+});
 
-app.post("/api/chat",(req,res)=>{
-  const usermessage = req.body.message
-  res.json({
-    response:`VAAS Recieved:${usermessage}`
-  })
-})
+app.post("/api/chat", async (req, res) => {
+  const message = req.body.message;
 
-app.listen(PORT, () => {
-  console.log(`VAAS server running on http://localhost:${PORT}`)
-})
+  try {
+    const response = await generateAIResponse(message);
+
+    res.json({
+      response: response,
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Something went wrong",
+    });
+  }
+});
+
+app.listen(5000, () => {
+  console.log("VAAS backend running on port 5000");
+});
