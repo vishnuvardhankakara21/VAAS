@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getBackendStatus, sendChatMessage } from "./services/api";
 import MessageList from "./components/MessageList";
 import ChatInput from "./components/ChatInput";
 import Loading from "./components/Loading";
@@ -11,12 +12,14 @@ function App() {
     document.title = `VAAS - ${messages.length} messages`;
   }, [messages]);
   useEffect(() => {
-    fetch("http://localhost:5000/api/status")
-      .then((response) => response.json())
-      .then((data) => {
-        setBackendMessage(data.message);
-      });
-  }, []);
+  getBackendStatus()
+    .then((data) => {
+      setBackendMessage(data.message);
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+}, []);
 
   function handleChange(event) {
     setMessage(event.target.value);
@@ -39,42 +42,26 @@ function App() {
     setMessage("");
     setIsLoading(true);
     try {
-      // fetch POST request here
-      const response = await fetch("http://localhost:5000/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: message,
-        }),
-      });
-      // check response.ok
-      if (!response.ok) {
-        throw new Error("Failed to get response");
-      }
-      // convert response to JSON
-      const data = await response.json();
-      // add assistant response
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          role: "assistant",
-          content: data.response,
-        },
-      ]);
-    } catch (error) {
-      // add an assistant error message
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          role: "assistant",
-          content: "Sorry, something went wrong. Please try again.",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
+  const data = await sendChatMessage(message);
+
+  setMessages((prevMessages) => [
+    ...prevMessages,
+    {
+      role: "assistant",
+      content: data.response,
+    },
+  ]);
+} catch (error) {
+  setMessages((prevMessages) => [
+    ...prevMessages,
+    {
+      role: "assistant",
+      content: "Sorry, something went wrong. Please try again.",
+    },
+  ]);
+} finally {
+  setIsLoading(false);
+}
   }
   return (
     <div>
