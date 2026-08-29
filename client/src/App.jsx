@@ -6,9 +6,18 @@ function App() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [backendMessage, setBackendMessage] = useState("");
   useEffect(() => {
     document.title = `VAAS - ${messages.length} messages`;
   }, [messages]);
+  useEffect(() => {
+    fetch("http://localhost:5000/api/status")
+      .then((response) => response.json())
+      .then((data) => {
+        setBackendMessage(data.message);
+      });
+  }, []);
+
   function handleChange(event) {
     setMessage(event.target.value);
   }
@@ -48,7 +57,9 @@ function App() {
         sendMessage={sendMessage}
         isLoading={isLoading}
       />
+      <p>{backendMessage}</p>
     </div>
+    
   );
 }
 export default App;
