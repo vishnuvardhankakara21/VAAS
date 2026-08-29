@@ -21,11 +21,13 @@ function App() {
   function handleChange(event) {
     setMessage(event.target.value);
   }
-  function sendMessage(event) {
+  async function sendMessage(event) {
     event.preventDefault();
+
     if (message.trim() === "" || isLoading) {
       return;
     }
+
     setMessages((prevMessages) => [
       ...prevMessages,
       {
@@ -33,18 +35,46 @@ function App() {
         content: message,
       },
     ]);
+
     setMessage("");
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      // fetch POST request here
+      const response = await fetch("http://localhost:5000/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: message,
+        }),
+      });
+      // check response.ok
+      if (!response.ok) {
+        throw new Error("Failed to get response");
+      }
+      // convert response to JSON
+      const data = await response.json();
+      // add assistant response
       setMessages((prevMessages) => [
         ...prevMessages,
         {
           role: "assistant",
-          content: "Hello! I am VAAS. How can I help you?",
+          content: data.response,
         },
       ]);
+    } catch (error) {
+      // add an assistant error message
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          role: "assistant",
+          content: "Sorry, something went wrong. Please try again.",
+        },
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   }
   return (
     <div>
@@ -59,7 +89,6 @@ function App() {
       />
       <p>{backendMessage}</p>
     </div>
-    
   );
 }
 export default App;
