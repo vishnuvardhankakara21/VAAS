@@ -1,18 +1,14 @@
 function MessageList({ messages }) {
   return (
-    <>
-      {messages.length === 0 ? (
-        <p>No messages yet. Start chatting with VAAS.</p>
-      ) : (
-        <div>
-          {messages.map((message, index) => (
-            <p key={index}>
-              {message.role === "user" ? "You" : "VAAS"}: {message.content}
-            </p>
-          ))}
+    <div>
+      {messages.map((message, index) => (
+        <div key={index}>
+          <strong>{message.role}</strong>
+          <p>{message.content}</p>
+          <small>{message.timestamp}</small>
         </div>
-      )}
-    </>
+      ))}
+    </div>
   );
 }
 
