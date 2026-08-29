@@ -12,14 +12,15 @@ export async function getBackendStatus() {
   return response.json();
 }
 
-export async function sendChatMessage(message) {
-  const response = await fetch(`${API_URL}/api/chat`, {
+export async function sendChatMessage(message, previousInteractionId) {
+  const response = await fetch("http://localhost:5000/api/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       message: message,
+      previousInteractionId: previousInteractionId,
     }),
   });
 

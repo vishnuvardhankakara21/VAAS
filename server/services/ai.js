@@ -4,11 +4,17 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-export async function generateAIResponse(message) {
+export async function generateAIResponse(message, previousInteractionId) {
   const response = await ai.interactions.create({
     model: "gemini-3.6-flash",
     input: message,
+    ...(previousInteractionId && {
+      previous_interaction_id: previousInteractionId,
+    }),
   });
 
-  return response.output_text;
+  return {
+    response: response.output_text,
+    interactionId: response.id,
+  };
 }

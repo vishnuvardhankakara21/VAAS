@@ -16,18 +16,23 @@ app.get("/api/status", (req, res) => {
 
 app.post("/api/chat", async (req, res) => {
   const message = req.body.message;
+  const previousInteractionId = req.body.previousInteractionId;
 
   try {
-    const response = await generateAIResponse(message);
+    const result = await generateAIResponse(
+      message,
+      previousInteractionId
+    );
 
     res.json({
-      response: response,
+      response: result.response,
+      interactionId: result.interactionId,
     });
   } catch (error) {
     console.error(error);
 
     res.status(500).json({
-      error: "Something went wrong",
+      error: "Failed to generate response",
     });
   }
 });

@@ -6,20 +6,21 @@ import Loading from "./components/Loading";
 function App() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
+  const [previousInteractionId, setPreviousInteractionId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [backendMessage, setBackendMessage] = useState("");
   useEffect(() => {
     document.title = `VAAS - ${messages.length} messages`;
   }, [messages]);
   useEffect(() => {
-  getBackendStatus()
-    .then((data) => {
-      setBackendMessage(data.message);
-    })
-    .catch((error) => {
-      console.error(error);
-    });
-}, []);
+    getBackendStatus()
+      .then((data) => {
+        setBackendMessage(data.message);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
 
   function handleChange(event) {
     setMessage(event.target.value);
@@ -42,26 +43,26 @@ function App() {
     setMessage("");
     setIsLoading(true);
     try {
-  const data = await sendChatMessage(message);
-
-  setMessages((prevMessages) => [
-    ...prevMessages,
-    {
-      role: "assistant",
-      content: data.response,
-    },
-  ]);
-} catch (error) {
-  setMessages((prevMessages) => [
-    ...prevMessages,
-    {
-      role: "assistant",
-      content: "Sorry, something went wrong. Please try again.",
-    },
-  ]);
-} finally {
-  setIsLoading(false);
-}
+      const data = await sendChatMessage(message, previousInteractionId);
+      setPreviousInteractionId(data.interactionId);
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          role: "assistant",
+          content: data.response,
+        },
+      ]);
+    } catch (error) {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          role: "assistant",
+          content: "Sorry, something went wrong. Please try again.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   }
   return (
     <div>
