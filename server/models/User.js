@@ -22,7 +22,36 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return !this.googleId && this.authProvider !== "google";
+      },
+    },
+
+    googleId: {
+      type: String,
+      sparse: true,
+      default: null,
+    },
+
+    avatar: {
+      type: String,
+      default: null,
+    },
+
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+
+    memories: {
+      type: [String],
+      default: [],
     },
   },
 
@@ -31,9 +60,13 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-const User = mongoose.model(
-  "User",
-  userSchema
-);
+// Never return password in JSON
+userSchema.methods.toJSON = function () {
+  const obj = this.toObject();
+  delete obj.password;
+  return obj;
+};
+
+const User = mongoose.model("User", userSchema);
 
 export default User;

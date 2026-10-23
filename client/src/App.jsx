@@ -1,1665 +1,797 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 import Login from "./components/Login";
 import Register from "./components/Register";
 import ConversationSidebar from "./components/ConversationSidebar";
 import MessageContent from "./components/MessageContent";
+import Settings from "./components/Settings";
 
-import {
-  sendChatMessage,
-  getConversation,
-} from "./services/api";
+import { sendChatMessage, getConversation, refreshToken } from "./services/api";
 
 import "./App.css";
 
 
+// ============================================================
+// TOKEN REFRESH UTILITY
+// ============================================================
+
+function isTokenExpiringSoon() {
+  const expiry = localStorage.getItem("tokenExpiry");
+  if (!expiry) return false;
+  const msLeft = Number(expiry) - Date.now();
+  return msLeft < 30 * 60 * 1000; // refresh if < 30 min left
+}
+
+function isTokenExpired() {
+  const expiry = localStorage.getItem("tokenExpiry");
+  if (!expiry) return true;
+  return Date.now() > Number(expiry);
+}
+
+
+// ============================================================
+// APP
+// ============================================================
+
 function App() {
 
-  // ========================================
+  // ──────────────────────────────────────────────────────────
   // AUTH STATE
-  // ========================================
+  // ──────────────────────────────────────────────────────────
 
   const [user, setUser] = useState(() => {
-
-    const savedUser = localStorage.getItem("user");
-
+    const saved = localStorage.getItem("user");
     try {
-
-      return savedUser
-        ? JSON.parse(savedUser)
-        : null;
-
+      return saved ? JSON.parse(saved) : null;
     } catch {
-
       localStorage.removeItem("user");
-
       return null;
-
     }
+  });
 
+  const [authView, setAuthView] = useState("login"); // "login" | "register"
+
+
+  // ──────────────────────────────────────────────────────────
+  // CHAT STATE
+  // ──────────────────────────────────────────────────────────
+
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [previousInteractionId, setPreviousInteractionId] = useState(null);
+
+
+  // ──────────────────────────────────────────────────────────
+  // EDITING
+  // ──────────────────────────────────────────────────────────
+
+  const [editingMessageIndex, setEditingMessageIndex] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
+
+
+  // ──────────────────────────────────────────────────────────
+  // UI STATE
+  // ──────────────────────────────────────────────────────────
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem("sidebarOpen");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
+
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    return saved !== null ? saved === "dark" : true;
   });
 
 
-  const [showRegister, setShowRegister] =
-    useState(false);
-
-
-  // ========================================
-  // CHAT STATE
-  // ========================================
-
-  const [messages, setMessages] = useState([]);
-
-  const [input, setInput] = useState("");
-
-  const [loading, setLoading] = useState(false);
-
-  const [
-    currentConversationId,
-    setCurrentConversationId,
-  ] = useState(null);
-
-  const [
-    previousInteractionId,
-    setPreviousInteractionId,
-  ] = useState(null);
-
-
-  // ========================================
-  // EDIT MESSAGE
-  // ========================================
-
-  const [
-    editingMessageIndex,
-    setEditingMessageIndex,
-  ] = useState(null);
-
-
-  // ========================================
-  // REGENERATE
-  // ========================================
-
-  const [regenerating, setRegenerating] =
-    useState(false);
-
-
-  // ========================================
-  // SIDEBAR REFRESH
-  // ========================================
-
-  const [refreshTrigger, setRefreshTrigger] =
-    useState(0);
-
-
-  // ========================================
-  // SETTINGS
-  // ========================================
-
-  const [showSettings, setShowSettings] =
-    useState(false);
-
-
-  // ========================================
-  // DARK MODE
-  // ========================================
-
-  const [darkMode, setDarkMode] =
-    useState(() => {
-
-      const savedTheme =
-        localStorage.getItem("theme");
-
-      return savedTheme === "dark";
-
-    });
-
-
-  // ========================================
-  // MOBILE SIDEBAR
-  // ========================================
-
-  const [mobileSidebarOpen, setMobileSidebarOpen] =
-    useState(false);
-
-
-  // ========================================
-  // AUTO SCROLL
-  // ========================================
+  // ──────────────────────────────────────────────────────────
+  // REFS
+  // ──────────────────────────────────────────────────────────
 
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
 
-  useEffect(() => {
-
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-
-  }, [
-    messages,
-    loading,
-    regenerating,
-  ]);
-
-
-  // ========================================
-  // APPLY THEME
-  // ========================================
+  // ──────────────────────────────────────────────────────────
+  // AUTO SCROLL
+  // ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading, regenerating]);
 
-    if (darkMode) {
 
-      document.body.classList.add("dark-mode");
+  // ──────────────────────────────────────────────────────────
+  // APPLY THEME & SIDEBAR PERSISTENCE
+  // ──────────────────────────────────────────────────────────
 
-      localStorage.setItem(
-        "theme",
-        "dark"
-      );
-
-    } else {
-
-      document.body.classList.remove("dark-mode");
-
-      localStorage.setItem(
-        "theme",
-        "light"
-      );
-
-    }
-
+  useEffect(() => {
+    const theme = darkMode ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.classList.toggle("dark-mode", darkMode);
+    document.documentElement.classList.toggle("light-mode", !darkMode);
+    document.body.setAttribute("data-theme", theme);
+    document.body.classList.toggle("dark-theme", darkMode);
+    document.body.classList.toggle("light-theme", !darkMode);
+    localStorage.setItem("theme", theme);
   }, [darkMode]);
 
+  useEffect(() => {
+    localStorage.setItem("sidebarOpen", String(sidebarOpen));
+  }, [sidebarOpen]);
 
-  // ========================================
-  // AUTH CHECK
-  // ========================================
+
+  // ──────────────────────────────────────────────────────────
+  // AUTH CHECK + TOKEN EXPIRY GUARD
+  // ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-
-    const token =
-      localStorage.getItem("token");
-
-    const savedUser =
-      localStorage.getItem("user");
+    const token = localStorage.getItem("token");
+    const savedUser = localStorage.getItem("user");
 
     if (!token || !savedUser) {
-
       setUser(null);
-
+      return;
     }
 
-  }, []);
+    if (isTokenExpired()) {
+      handleLogout();
+      return;
+    }
+
+    // Auto-refresh token if expiring soon
+    if (isTokenExpiringSoon()) {
+      refreshToken().catch(() => {
+        console.info("Token refresh failed – user will need to re-login when token expires");
+      });
+    }
+
+    // Listen for session-expired events (dispatched by api.js on 401 TOKEN_EXPIRED)
+    function handleSessionExpired() {
+      handleLogout();
+    }
+    window.addEventListener("vaas:session-expired", handleSessionExpired);
+
+    // Check token expiry every minute
+    const interval = setInterval(() => {
+      if (isTokenExpired()) {
+        handleLogout();
+      }
+    }, 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("vaas:session-expired", handleSessionExpired);
+    };
+  }, [user]);
 
 
-  // ========================================
-  // LOGIN
-  // ========================================
+  // ──────────────────────────────────────────────────────────
+  // AUTO-RESIZE TEXTAREA
+  // ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 180) + "px";
+  }, [input]);
+
+
+  // ──────────────────────────────────────────────────────────
+  // AUTH HANDLERS
+  // ──────────────────────────────────────────────────────────
 
   function handleLogin(loggedInUser) {
-
     setUser(loggedInUser);
-
-    setMessages([]);
-
-    setInput("");
-
-    setCurrentConversationId(null);
-
-    setPreviousInteractionId(null);
-
-    setEditingMessageIndex(null);
-
-    setRegenerating(false);
-
-    setShowSettings(false);
-
-    setMobileSidebarOpen(false);
-
+    resetChatState();
   }
-
-
-  // ========================================
-  // REGISTER
-  // ========================================
 
   function handleRegister(registeredUser) {
-
     setUser(registeredUser);
-
-    setMessages([]);
-
-    setInput("");
-
-    setCurrentConversationId(null);
-
-    setPreviousInteractionId(null);
-
-    setEditingMessageIndex(null);
-
-    setRegenerating(false);
-
-    setShowSettings(false);
-
-    setMobileSidebarOpen(false);
-
+    resetChatState();
   }
-
-
-  // ========================================
-  // LOGOUT
-  // ========================================
 
   function handleLogout() {
-
-    if (loading || regenerating) {
-      return;
-    }
-
     localStorage.removeItem("token");
-
+    localStorage.removeItem("tokenExpiry");
     localStorage.removeItem("user");
-
     setUser(null);
-
-    setMessages([]);
-
-    setInput("");
-
-    setCurrentConversationId(null);
-
-    setPreviousInteractionId(null);
-
-    setEditingMessageIndex(null);
-
-    setRegenerating(false);
-
+    resetChatState();
     setShowSettings(false);
-
     setMobileSidebarOpen(false);
+    setAuthView("login");
+  }
 
-    setShowRegister(false);
-
+  function resetChatState() {
+    setMessages([]);
+    setInput("");
+    setCurrentConversationId(null);
+    setPreviousInteractionId(null);
+    setEditingMessageIndex(null);
+    setRegenerating(false);
+    setMobileSidebarOpen(false);
   }
 
 
-  // ========================================
+  // ──────────────────────────────────────────────────────────
   // NEW CHAT
-  // ========================================
+  // ──────────────────────────────────────────────────────────
 
   function handleNewChat() {
-
-    if (loading || regenerating) {
-      return;
-    }
-
-    setMessages([]);
-
-    setInput("");
-
-    setCurrentConversationId(null);
-
-    setPreviousInteractionId(null);
-
-    setEditingMessageIndex(null);
-
-    setMobileSidebarOpen(false);
-
+    if (loading || regenerating) return;
+    resetChatState();
   }
 
 
-  // ========================================
+  // ──────────────────────────────────────────────────────────
   // SELECT CONVERSATION
-  // ========================================
+  // ──────────────────────────────────────────────────────────
 
-  async function handleSelectConversation(
-    conversationId
-  ) {
-
-    if (loading || regenerating) {
-      return;
-    }
+  async function handleSelectConversation(conversationId) {
+    if (loading || regenerating) return;
 
     try {
-
       setLoading(true);
-
-      const conversation =
-        await getConversation(
-          conversationId
-        );
-
-      setMessages(
-        conversation.messages || []
-      );
-
-      setCurrentConversationId(
-        conversation._id
-      );
-
-      setPreviousInteractionId(
-        conversation.interactionId || null
-      );
-
+      const conversation = await getConversation(conversationId);
+      setMessages(conversation.messages || []);
+      setCurrentConversationId(conversation._id);
+      setPreviousInteractionId(conversation.interactionId || null);
       setInput("");
-
       setEditingMessageIndex(null);
-
-      // Close mobile sidebar
       setMobileSidebarOpen(false);
-
-    } catch (error) {
-
-      console.error(
-        "Failed to load conversation:",
-        error
-      );
-
+    } catch (err) {
+      console.error("Failed to load conversation:", err);
     } finally {
-
       setLoading(false);
-
     }
-
   }
 
 
-  // ========================================
+  // ──────────────────────────────────────────────────────────
   // EDIT MESSAGE
-  // ========================================
+  // ──────────────────────────────────────────────────────────
 
   function handleEditMessage(index) {
+    if (loading || regenerating) return;
+    const msg = messages[index];
+    if (!msg || msg.role !== "user") return;
 
-    if (loading || regenerating) {
-      return;
-    }
-
-    const message = messages[index];
-
-    if (
-      !message ||
-      message.role !== "user"
-    ) {
-      return;
-    }
-
-    setInput(message.content);
-
+    setInput(msg.content);
     setEditingMessageIndex(index);
-
-    setTimeout(() => {
-
-      const textarea =
-        document.querySelector(
-          ".chat-textarea"
-        );
-
-      textarea?.focus();
-
-    }, 0);
-
+    setTimeout(() => textareaRef.current?.focus(), 0);
   }
-
-
-  // ========================================
-  // CANCEL EDIT
-  // ========================================
 
   function handleCancelEdit() {
-
-    if (loading || regenerating) {
-      return;
-    }
-
+    if (loading || regenerating) return;
     setInput("");
-
     setEditingMessageIndex(null);
-
   }
 
 
-  // ========================================
+  // ──────────────────────────────────────────────────────────
+  // COPY MESSAGE
+  // ──────────────────────────────────────────────────────────
+
+  async function handleCopyMessage(content, index) {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(index);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  }
+
+
+  // ──────────────────────────────────────────────────────────
   // SEND MESSAGE
-  // ========================================
+  // ──────────────────────────────────────────────────────────
 
-  async function handleSendMessage(event) {
+  const handleSendMessage = useCallback(async (event) => {
+    if (event) event.preventDefault();
 
-    if (event) {
-      event.preventDefault();
-    }
-
-    const trimmedMessage =
-      input.trim();
-
-    if (!trimmedMessage) {
-      return;
-    }
-
-    if (loading || regenerating) {
-      return;
-    }
+    const trimmed = input.trim();
+    if (!trimmed || loading || regenerating) return;
 
 
-    // ======================================
-    // EDIT MODE
-    // ======================================
-
-    if (
-      editingMessageIndex !== null
-    ) {
-
-      const editedIndex =
-        editingMessageIndex;
-
-      const editedMessage =
-        messages[editedIndex];
-
-      if (
-        !editedMessage ||
-        editedMessage.role !== "user"
-      ) {
-
+    // ── EDIT MODE ──────────────────────────────────────────
+    if (editingMessageIndex !== null) {
+      const editedIndex = editingMessageIndex;
+      const editedMsg = messages[editedIndex];
+      if (!editedMsg || editedMsg.role !== "user") {
         setEditingMessageIndex(null);
-
         setInput("");
-
         return;
-
       }
 
-      const messagesBeforeEdit =
-        messages.slice(
-          0,
-          editedIndex
-        );
-
-      setMessages([
-        ...messagesBeforeEdit,
-        {
-          role: "user",
-          content: trimmedMessage,
-        },
-      ]);
-
+      const beforeEdit = messages.slice(0, editedIndex);
+      setMessages([...beforeEdit, { role: "user", content: trimmed }]);
       setInput("");
-
       setEditingMessageIndex(null);
-
       setLoading(true);
 
       try {
-
-        const data =
-          await sendChatMessage(
-            trimmedMessage,
-            null,
-            currentConversationId
-          );
-
-        setMessages(
-          (previousMessages) => [
-            ...previousMessages,
-            {
-              role: "assistant",
-              content:
-                data.response ||
-                "VAAS could not generate a response.",
-            },
-          ]
-        );
-
-        if (data.interactionId) {
-
-          setPreviousInteractionId(
-            data.interactionId
-          );
-
-        }
-
-        if (data.conversationId) {
-
-          setCurrentConversationId(
-            data.conversationId
-          );
-
-        }
-
-        setRefreshTrigger(
-          (value) => value + 1
-        );
-
-      } catch (error) {
-
-        console.error(
-          "Edit message error:",
-          error
-        );
-
-        setMessages(
-          (previousMessages) => [
-            ...previousMessages,
-            {
-              role: "assistant",
-              content:
-                error.message ||
-                "Something went wrong. Please try again.",
-            },
-          ]
-        );
-
+        const data = await sendChatMessage(trimmed, null, currentConversationId);
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: data.response || "VAAS could not generate a response.",
+        }]);
+        if (data.interactionId) setPreviousInteractionId(data.interactionId);
+        if (data.conversationId) setCurrentConversationId(data.conversationId);
+        setRefreshTrigger((v) => v + 1);
+      } catch (err) {
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: err.message || "Something went wrong. Please try again.",
+        }]);
       } finally {
-
         setLoading(false);
-
       }
-
       return;
-
     }
 
 
-    // ======================================
-    // NORMAL MESSAGE
-    // ======================================
-
-    setMessages(
-      (previousMessages) => [
-        ...previousMessages,
-        {
-          role: "user",
-          content: trimmedMessage,
-        },
-      ]
-    );
-
+    // ── NORMAL SEND ────────────────────────────────────────
+    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
     setInput("");
-
     setLoading(true);
 
     try {
-
-      const data =
-        await sendChatMessage(
-          trimmedMessage,
-          previousInteractionId,
-          currentConversationId
-        );
-
-      setMessages(
-        (previousMessages) => [
-          ...previousMessages,
-          {
-            role: "assistant",
-            content:
-              data.response ||
-              "VAAS could not generate a response.",
-          },
-        ]
-      );
-
-      if (data.interactionId) {
-
-        setPreviousInteractionId(
-          data.interactionId
-        );
-
-      }
-
-      if (data.conversationId) {
-
-        setCurrentConversationId(
-          data.conversationId
-        );
-
-      }
-
-      setRefreshTrigger(
-        (value) => value + 1
-      );
-
-    } catch (error) {
-
-      console.error(
-        "Chat error:",
-        error
-      );
-
-      setMessages(
-        (previousMessages) => [
-          ...previousMessages,
-          {
-            role: "assistant",
-            content:
-              error.message ||
-              "Something went wrong. Please try again.",
-          },
-        ]
-      );
-
+      const data = await sendChatMessage(trimmed, previousInteractionId, currentConversationId);
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: data.response || "VAAS could not generate a response.",
+      }]);
+      if (data.interactionId) setPreviousInteractionId(data.interactionId);
+      if (data.conversationId) setCurrentConversationId(data.conversationId);
+      setRefreshTrigger((v) => v + 1);
+    } catch (err) {
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: err.message || "Something went wrong. Please try again.",
+      }]);
     } finally {
-
       setLoading(false);
-
     }
+  }, [input, loading, regenerating, editingMessageIndex, messages, previousInteractionId, currentConversationId]);
 
-  }
 
-
-  // ========================================
-  // REGENERATE RESPONSE
-  // ========================================
+  // ──────────────────────────────────────────────────────────
+  // REGENERATE
+  // ──────────────────────────────────────────────────────────
 
   async function handleRegenerate() {
-
-    if (loading || regenerating) {
-      return;
-    }
-
-    if (messages.length === 0) {
-      return;
-    }
+    if (loading || regenerating || messages.length === 0) return;
 
     let lastUserIndex = -1;
-
-    for (
-      let i = messages.length - 1;
-      i >= 0;
-      i--
-    ) {
-
-      if (
-        messages[i].role === "user"
-      ) {
-
-        lastUserIndex = i;
-
-        break;
-
-      }
-
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") { lastUserIndex = i; break; }
     }
+    if (lastUserIndex === -1) return;
 
-    if (lastUserIndex === -1) {
-      return;
-    }
+    const lastUserMessage = messages[lastUserIndex];
 
-    const lastUserMessage =
-      messages[lastUserIndex];
-
-    setMessages(
-      (previousMessages) => {
-
-        if (
-          previousMessages.length > 0 &&
-          previousMessages[
-            previousMessages.length - 1
-          ].role === "assistant"
-        ) {
-
-          return previousMessages.slice(
-            0,
-            previousMessages.length - 1
-          );
-
-        }
-
-        return previousMessages;
-
+    setMessages((prev) => {
+      if (prev.length > 0 && prev[prev.length - 1].role === "assistant") {
+        return prev.slice(0, prev.length - 1);
       }
-    );
+      return prev;
+    });
 
     setRegenerating(true);
 
     try {
-
-      const data =
-        await sendChatMessage(
-          lastUserMessage.content,
-          previousInteractionId,
-          currentConversationId
-        );
-
-      setMessages(
-        (previousMessages) => [
-          ...previousMessages,
-          {
-            role: "assistant",
-            content:
-              data.response ||
-              "VAAS could not generate a response.",
-          },
-        ]
-      );
-
-      if (data.interactionId) {
-
-        setPreviousInteractionId(
-          data.interactionId
-        );
-
-      }
-
-      if (data.conversationId) {
-
-        setCurrentConversationId(
-          data.conversationId
-        );
-
-      }
-
-      setRefreshTrigger(
-        (value) => value + 1
-      );
-
-    } catch (error) {
-
-      console.error(
-        "Regenerate error:",
-        error
-      );
-
-      setMessages(
-        (previousMessages) => [
-          ...previousMessages,
-          {
-            role: "assistant",
-            content:
-              error.message ||
-              "Failed to regenerate response.",
-          },
-        ]
-      );
-
+      const data = await sendChatMessage(lastUserMessage.content, previousInteractionId, currentConversationId);
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: data.response || "VAAS could not generate a response.",
+      }]);
+      if (data.interactionId) setPreviousInteractionId(data.interactionId);
+      if (data.conversationId) setCurrentConversationId(data.conversationId);
+      setRefreshTrigger((v) => v + 1);
+    } catch (err) {
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: err.message || "Failed to regenerate response.",
+      }]);
     } finally {
-
       setRegenerating(false);
-
     }
-
   }
 
 
-  // ========================================
-  // COPY MESSAGE
-  // ========================================
-
-  async function handleCopyMessage(content) {
-
-    try {
-
-      await navigator.clipboard.writeText(
-        content
-      );
-
-    } catch (error) {
-
-      console.error(
-        "Failed to copy message:",
-        error
-      );
-
-    }
-
-  }
-
-
-  // ========================================
+  // ──────────────────────────────────────────────────────────
   // KEYBOARD HANDLER
-  // ========================================
+  // ──────────────────────────────────────────────────────────
 
   function handleKeyDown(event) {
-
-    if (
-      event.key === "Enter" &&
-      event.shiftKey
-    ) {
-
-      return;
-
-    }
-
-    if (event.key === "Enter") {
-
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-
-      if (
-        !loading &&
-        !regenerating &&
-        input.trim()
-      ) {
-
+      if (!loading && !regenerating && input.trim()) {
         handleSendMessage(event);
-
       }
-
     }
-
   }
 
 
-  // ========================================
-  // SETTINGS
-  // ========================================
-
-  function handleOpenSettings() {
-
-    if (loading || regenerating) {
-      return;
-    }
-
-    setShowSettings(true);
-
-  }
-
-
-  function handleCloseSettings() {
-
-    setShowSettings(false);
-
-  }
-
-
-  // ========================================
-  // THEME
-  // ========================================
-
-  function handleToggleTheme() {
-
-    setDarkMode(
-      (previous) => !previous
-    );
-
-  }
-
-
-  // ========================================
-  // MOBILE SIDEBAR
-  // ========================================
-
-  function handleOpenMobileSidebar() {
-
-    if (loading || regenerating) {
-      return;
-    }
-
-    setMobileSidebarOpen(true);
-
-  }
-
-
-  function handleCloseMobileSidebar() {
-
-    setMobileSidebarOpen(false);
-
-  }
-
-
-  // ========================================
+  // ──────────────────────────────────────────────────────────
   // USER INITIAL
-  // ========================================
+  // ──────────────────────────────────────────────────────────
 
-  const userInitial =
-    user?.name
-      ?.charAt(0)
-      ?.toUpperCase() || "U";
+  const userInitial = user?.name?.charAt(0)?.toUpperCase() || "U";
 
 
-  // ========================================
-  // NOT LOGGED IN
-  // ========================================
+  // ──────────────────────────────────────────────────────────
+  // SUGGESTION CHIPS
+  // ──────────────────────────────────────────────────────────
+
+  const suggestions = [
+    { icon: "🧠", text: "Explain quantum computing simply" },
+    { icon: "💻", text: "Write a Python web scraper" },
+    { icon: "✍️", text: "Help me write a cover letter" },
+    { icon: "📐", text: "Solve this math problem step by step" },
+    { icon: "🌍", text: "Summarize the history of the internet" },
+    { icon: "🎯", text: "Create a 30-day study plan" },
+  ];
+
+
+  // ──────────────────────────────────────────────────────────
+  // AUTH SCREEN
+  // ──────────────────────────────────────────────────────────
 
   if (!user) {
-
     return (
-
       <div className="auth-page">
-
-        <div className="auth-container">
-
-          {showRegister ? (
-
-            <>
-
-              <Register
-                onRegister={
-                  handleRegister
-                }
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowRegister(false)
-                }
-              >
-                Already have an account?
-                Login
-              </button>
-
-            </>
-
-          ) : (
-
-            <>
-
-              <Login
-                onLogin={
-                  handleLogin
-                }
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowRegister(true)
-                }
-              >
-                Don't have an account?
-                Register
-              </button>
-
-            </>
-
-          )}
-
+        {/* Animated background */}
+        <div className="auth-bg">
+          <div className="auth-orb auth-orb-1" />
+          <div className="auth-orb auth-orb-2" />
+          <div className="auth-orb auth-orb-3" />
         </div>
 
+        <div className="auth-container">
+          {authView === "login" ? (
+            <Login
+              onLogin={handleLogin}
+              onSwitchToRegister={() => setAuthView("register")}
+            />
+          ) : (
+            <Register
+              onRegister={handleRegister}
+              onSwitchToLogin={() => setAuthView("login")}
+            />
+          )}
+        </div>
       </div>
-
     );
-
   }
 
 
-  // ========================================
-  // MAIN APPLICATION
-  // ========================================
+  // ──────────────────────────────────────────────────────────
+  // MAIN APP
+  // ──────────────────────────────────────────────────────────
 
   return (
+    <div className={`app ${sidebarOpen ? "sidebar-expanded" : "sidebar-collapsed"}`}>
 
-    <div
-      className={`app ${
-        darkMode
-          ? "app-dark"
-          : ""
-      }`}
-    >
-
-      {/* ====================================
-          MOBILE SIDEBAR OVERLAY
-      ==================================== */}
-
+      {/* Mobile Overlay */}
       {mobileSidebarOpen && (
-
         <div
-          className="mobile-sidebar-overlay"
-          onClick={
-            handleCloseMobileSidebar
-          }
+          className="mobile-overlay"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden="true"
         />
-
       )}
 
-
-      {/* ====================================
-          SIDEBAR
-      ==================================== */}
-
-      <div
-        className={`sidebar-wrapper ${
-          mobileSidebarOpen
-            ? "mobile-sidebar-open"
-            : ""
-        }`}
-      >
-
+      {/* Sidebar */}
+      <div className={`sidebar-wrapper ${sidebarOpen ? "expanded" : "collapsed"} ${mobileSidebarOpen ? "mobile-open" : ""}`}>
         <ConversationSidebar
-
-          currentConversationId={
-            currentConversationId
-          }
-
-          onSelectConversation={
-            handleSelectConversation
-          }
-
-          onNewChat={
-            handleNewChat
-          }
-
-          refreshTrigger={
-            refreshTrigger
-          }
-
+          currentConversationId={currentConversationId}
+          onSelectConversation={handleSelectConversation}
+          onNewChat={handleNewChat}
+          refreshTrigger={refreshTrigger}
+          user={user}
+          onOpenSettings={() => setShowSettings(true)}
+          onLogout={handleLogout}
+          onToggleSidebar={() => {
+            if (window.innerWidth <= 768) {
+              setMobileSidebarOpen(false);
+            } else {
+              setSidebarOpen(false);
+            }
+          }}
         />
-
       </div>
 
-
-      {/* ====================================
-          CHAT AREA
-      ==================================== */}
-
+      {/* Chat Area */}
       <main className="chat-area">
 
-
-        {/* ==================================
-            HEADER
-        ================================== */}
-
+        {/* Header */}
         <header className="chat-header">
+          <div className="chat-header-left">
+            <button
+              className="sidebar-toggle-btn"
+              id="sidebar-toggle-btn"
+              onClick={() => {
+                if (window.innerWidth <= 768) {
+                  setMobileSidebarOpen((prev) => !prev);
+                } else {
+                  setSidebarOpen((prev) => !prev);
+                }
+              }}
+              title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+              aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="9" y1="3" x2="9" y2="21"/>
+                {sidebarOpen ? (
+                  <path d="M15 9l-3 3 3 3"/>
+                ) : (
+                  <path d="M13 9l3 3-3 3"/>
+                )}
+              </svg>
+            </button>
 
-
-          {/* MOBILE MENU BUTTON */}
-
-          <button
-            type="button"
-            className="mobile-menu-button"
-            onClick={
-              handleOpenMobileSidebar
-            }
-            disabled={
-              loading ||
-              regenerating
-            }
-            aria-label="Open conversations"
-          >
-            ☰
-          </button>
-
-
-          {/* HEADER BRAND */}
-
-          <div className="header-title">
-
-            <h1>
-              VAAS
-            </h1>
-
-            <p>
-              AI Assistant
-            </p>
-
+            <div className="chat-header-brand">
+              <div className="chat-header-logo">✦</div>
+              <div>
+                <h1 className="chat-header-title">VAAS</h1>
+                <p className="chat-header-subtitle">AI Assistant</p>
+              </div>
+            </div>
           </div>
 
-
-          {/* USER SECTION */}
-
-          <div className="user-section">
-
-            <div className="header-avatar">
-
-              {userInitial}
-
+          <div className="chat-header-right">
+            <div className="header-status">
+              <span className="status-dot" />
+              <span className="status-text">Online</span>
             </div>
 
-            <span>
-              {user.name}
-            </span>
-
-
-            <button
-              type="button"
-              className="settings-button"
-              onClick={
-                handleOpenSettings
-              }
-              disabled={
-                loading ||
-                regenerating
-              }
-            >
-              Settings
-            </button>
-
+            <div className="header-avatar" title={user.name}>
+              {userInitial}
+            </div>
 
             <button
-              type="button"
-              onClick={
-                handleLogout
-              }
-              disabled={
-                loading ||
-                regenerating
-              }
+              className="header-settings-btn"
+              id="header-settings-btn"
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              aria-label="Open settings"
             >
-              Logout
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
             </button>
-
           </div>
-
         </header>
 
 
-        {/* ==================================
-            MESSAGES
-        ================================== */}
-
-        <div className="messages-container">
-
-
-          {/* WELCOME */}
+        {/* Messages */}
+        <div className="messages-area" id="messages-area">
 
           {messages.length === 0 ? (
-
-            <div className="welcome-message">
-
-              <div className="welcome-icon">
-                ✦
+            <div className="welcome-screen">
+              <div className="welcome-icon-wrapper">
+                <div className="welcome-icon">✦</div>
+                <div className="welcome-icon-ring" />
               </div>
 
-              <h2>
-                Welcome to VAAS
-              </h2>
-
-              <p>
-                Your intelligent AI
-                assistant.
-                How can I help you
-                today?
+              <h2 className="welcome-title">Hello, {user.name.split(" ")[0]} 👋</h2>
+              <p className="welcome-subtitle">
+                I&apos;m VAAS, your intelligent AI assistant.<br />
+                What would you like to explore today?
               </p>
 
-
-              <div className="welcome-suggestions">
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setInput(
-                      "Explain artificial intelligence in simple terms"
-                    )
-                  }
-                >
-                  Explain AI
-                </button>
-
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setInput(
-                      "Give me a Java coding problem"
-                    )
-                  }
-                >
-                  Give me a coding problem
-                </button>
-
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setInput(
-                      "Help me create a study plan"
-                    )
-                  }
-                >
-                  Create a study plan
-                </button>
-
+              <div className="suggestion-grid">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    className="suggestion-chip"
+                    onClick={() => setInput(s.text)}
+                    type="button"
+                  >
+                    <span className="suggestion-chip-icon">{s.icon}</span>
+                    <span className="suggestion-chip-text">{s.text}</span>
+                  </button>
+                ))}
               </div>
-
             </div>
-
           ) : (
-
             <div className="message-list">
+              {messages.map((message, index) => {
+                const isUser = message.role === "user";
+                const isLast = index === messages.length - 1;
 
-              {messages.map(
-                (message, index) => {
-
-                  const isUser =
-                    message.role === "user";
-
-                  const isLastMessage =
-                    index ===
-                    messages.length - 1;
-
-
-                  return (
-
-                    <div
-                      key={index}
-                      className={`message-row ${
-                        isUser
-                          ? "user-row"
-                          : "assistant-row"
-                      }`}
-                    >
-
-                      <div
-                        className={`message-avatar ${
-                          isUser
-                            ? "user-avatar"
-                            : "assistant-avatar"
-                        }`}
-                      >
-
-                        {isUser
-                          ? userInitial
-                          : "✦"}
-
-                      </div>
-
-
-                      <div
-                        className={`message ${
-                          isUser
-                            ? "user-message"
-                            : "assistant-message"
-                        }`}
-                      >
-
-                        <div className="message-author">
-
-                          {isUser
-                            ? user.name
-                            : "VAAS"}
-
-                        </div>
-
-
-                        <div className="message-content">
-
-                          <MessageContent
-                            content={
-                              message.content
-                            }
-                          />
-
-
-                          {/* USER ACTIONS */}
-
-                          {isUser &&
-                            !loading &&
-                            !regenerating && (
-
-                              <div className="message-actions">
-
-                                <button
-                                  type="button"
-                                  className="message-action-button"
-                                  onClick={() =>
-                                    handleEditMessage(
-                                      index
-                                    )
-                                  }
-                                >
-                                  Edit
-                                </button>
-
-                              </div>
-
-                          )}
-
-
-                          {/* ASSISTANT ACTIONS */}
-
-                          {!isUser &&
-                            !loading &&
-                            !regenerating &&
-                            isLastMessage && (
-
-                              <div className="message-actions">
-
-                                <button
-                                  type="button"
-                                  className="message-action-button"
-                                  onClick={() =>
-                                    handleCopyMessage(
-                                      message.content
-                                    )
-                                  }
-                                >
-                                  Copy
-                                </button>
-
-
-                                <button
-                                  type="button"
-                                  className="message-action-button"
-                                  onClick={
-                                    handleRegenerate
-                                  }
-                                >
-                                  Regenerate
-                                </button>
-
-                              </div>
-
-                          )}
-
-                        </div>
-
-                      </div>
-
+                return (
+                  <div
+                    key={index}
+                    className={`message-row ${isUser ? "user-row" : "ai-row"}`}
+                  >
+                    {/* Avatar */}
+                    <div className={`msg-avatar ${isUser ? "user-avatar" : "ai-avatar"}`}>
+                      {isUser ? userInitial : "✦"}
                     </div>
 
-                  );
+                    {/* Bubble */}
+                    <div className={`msg-bubble ${isUser ? "user-bubble" : "ai-bubble"}`}>
+                      <div className="msg-author">
+                        {isUser ? user.name : "VAAS"}
+                      </div>
 
-                }
-              )}
+                      <div className="msg-content">
+                        <MessageContent content={message.content} darkMode={darkMode} />
+                      </div>
 
-            </div>
+                      {/* User Actions */}
+                      {isUser && !loading && !regenerating && (
+                        <div className="msg-actions">
+                          <button
+                            type="button"
+                            className="msg-action-btn"
+                            onClick={() => handleEditMessage(index)}
+                            title="Edit message"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Edit
+                          </button>
+                        </div>
+                      )}
 
-          )}
+                      {/* AI Actions */}
+                      {!isUser && !loading && !regenerating && isLast && (
+                        <div className="msg-actions">
+                          <button
+                            type="button"
+                            className={`msg-action-btn ${copiedMessageId === index ? "copied" : ""}`}
+                            onClick={() => handleCopyMessage(message.content, index)}
+                            title="Copy response"
+                          >
+                            {copiedMessageId === index ? (
+                              <>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Copied!
+                              </>
+                            ) : (
+                              <>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                                Copy
+                              </>
+                            )}
+                          </button>
 
-
-          {/* TYPING */}
-
-          {(loading ||
-            regenerating) && (
-
-            <div className="message-row assistant-row">
-
-              <div className="message-avatar assistant-avatar">
-                ✦
-              </div>
-
-              <div className="message assistant-message">
-
-                <div className="message-author">
-                  VAAS
-                </div>
-
-                <div className="message-content">
-
-                  <div className="typing-dots">
-
-                    <span>•</span>
-                    <span>•</span>
-                    <span>•</span>
-
+                          <button
+                            type="button"
+                            className="msg-action-btn"
+                            onClick={handleRegenerate}
+                            title="Regenerate response"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="23 4 23 10 17 10"/>
+                              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                            Regenerate
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-
-                </div>
-
-              </div>
-
+                );
+              })}
             </div>
-
           )}
 
+          {/* Typing indicator */}
+          {(loading || regenerating) && (
+            <div className="message-row ai-row">
+              <div className="msg-avatar ai-avatar">✦</div>
+              <div className="msg-bubble ai-bubble">
+                <div className="msg-author">VAAS</div>
+                <div className="typing-indicator">
+                  <span /><span /><span />
+                </div>
+              </div>
+            </div>
+          )}
 
-          <div
-            ref={messagesEndRef}
-          />
-
+          <div ref={messagesEndRef} />
         </div>
 
 
-        {/* ====================================
-            CHAT INPUT
-        ==================================== */}
+        {/* Input */}
+        <div className="input-area">
 
-        <form
-          className="chat-input-container"
-          onSubmit={
-            handleSendMessage
-          }
-        >
-
-
-          {/* EDIT BAR */}
-
+          {/* Edit bar */}
           {editingMessageIndex !== null && (
-
-            <div className="edit-mode-bar">
-
-              <span>
-                Editing message
-              </span>
-
-              <button
-                type="button"
-                onClick={
-                  handleCancelEdit
-                }
-              >
+            <div className="edit-bar">
+              <div className="edit-bar-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                <span>Editing message</span>
+              </div>
+              <button type="button" className="edit-bar-cancel" onClick={handleCancelEdit}>
                 Cancel
               </button>
-
             </div>
-
           )}
 
-
-          <div className="chat-input-form">
-
-            <textarea
-              className="chat-textarea"
-
-              placeholder={
-                editingMessageIndex !==
-                null
-                  ? "Edit your message..."
-                  : "Message VAAS..."
-              }
-
-              value={input}
-
-              onChange={(event) =>
-                setInput(
-                  event.target.value
-                )
-              }
-
-              onKeyDown={
-                handleKeyDown
-              }
-
-              disabled={
-                loading ||
-                regenerating
-              }
-
-              rows={1}
-            />
-
-
-            <button
-              type="submit"
-              className="send-button"
-
-              disabled={
-                loading ||
-                regenerating ||
-                !input.trim()
-              }
-            >
-
-              {loading
-                ? "..."
-                : editingMessageIndex !==
-                    null
-                  ? "✓"
-                  : "↑"}
-
-            </button>
-
-          </div>
-
-
-          <p className="input-hint">
-
-            Enter to send • Shift +
-            Enter for new line
-
-          </p>
-
-        </form>
-
-
-        {/* ====================================
-            SETTINGS
-        ==================================== */}
-
-        {showSettings && (
-
-          <div
-            className="settings-overlay"
-            onClick={(event) => {
-
-              if (
-                event.target ===
-                event.currentTarget
-              ) {
-
-                handleCloseSettings();
-
-              }
-
-            }}
-          >
-
-            <div className="settings-panel">
-
-
-              {/* SETTINGS HEADER */}
-
-              <div className="settings-header">
-
-                <div>
-
-                  <h2>
-                    Settings
-                  </h2>
-
-                  <p>
-                    Manage your VAAS preferences
-                  </p>
-
-                </div>
-
-
-                <button
-                  type="button"
-                  className="settings-close-button"
-                  onClick={
-                    handleCloseSettings
-                  }
-                >
-                  ×
-                </button>
-
-              </div>
-
-
-              {/* PROFILE */}
-
-              <div className="settings-section">
-
-                <h3>
-                  Profile
-                </h3>
-
-                <div className="profile-card">
-
-                  <div className="profile-avatar">
-                    {userInitial}
-                  </div>
-
-                  <div className="profile-info">
-
-                    <strong>
-                      {user.name}
-                    </strong>
-
-                    <span>
-                      {user.email ||
-                        "No email available"}
-                    </span>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-
-              {/* APPEARANCE */}
-
-              <div className="settings-section">
-
-                <h3>
-                  Appearance
-                </h3>
-
-                <div className="settings-option">
-
-                  <div>
-
-                    <strong>
-                      Dark Mode
-                    </strong>
-
-                    <span>
-                      Switch between light
-                      and dark appearance
-                    </span>
-
-                  </div>
-
-
-                  <button
-                    type="button"
-                    className={`theme-toggle ${
-                      darkMode
-                        ? "active"
-                        : ""
-                    }`}
-                    onClick={
-                      handleToggleTheme
-                    }
-                    aria-label="Toggle dark mode"
-                  >
-
-                    <span />
-
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* ACCOUNT */}
-
-              <div className="settings-section">
-
-                <h3>
-                  Account
-                </h3>
-
-                <button
-                  type="button"
-                  className="settings-logout-button"
-                  onClick={
-                    handleLogout
-                  }
-                  disabled={
-                    loading ||
-                    regenerating
-                  }
-                >
-                  Logout from VAAS
-                </button>
-
-              </div>
-
+          <form className="input-form" onSubmit={handleSendMessage}>
+            <div className="input-box">
+              <textarea
+                ref={textareaRef}
+                className="chat-textarea"
+                id="chat-input"
+                placeholder={editingMessageIndex !== null ? "Edit your message..." : "Message VAAS..."}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading || regenerating}
+                rows={1}
+                aria-label="Message input"
+              />
+
+              <button
+                type="submit"
+                className={`send-btn ${input.trim() && !loading && !regenerating ? "send-btn-active" : ""}`}
+                id="send-btn"
+                disabled={loading || regenerating || !input.trim()}
+                aria-label="Send message"
+              >
+                {loading || regenerating ? (
+                  <span className="send-spinner" />
+                ) : editingMessageIndex !== null ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="19" x2="12" y2="5"/>
+                    <polyline points="5 12 12 5 19 12"/>
+                  </svg>
+                )}
+              </button>
             </div>
 
-          </div>
-
-        )}
+            <p className="input-hint">
+              Press <kbd>Enter</kbd> to send &nbsp;·&nbsp; <kbd>Shift+Enter</kbd> for new line
+            </p>
+          </form>
+        </div>
 
       </main>
 
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <Settings
+          user={user}
+          darkMode={darkMode}
+          onToggleTheme={() => setDarkMode((prev) => !prev)}
+          onLogout={handleLogout}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
     </div>
-
   );
-
 }
-
 
 export default App;

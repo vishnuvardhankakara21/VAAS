@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
 
 import mongoose from "mongoose";
 
@@ -11,14 +12,17 @@ import { connectDB } from "./config/db.js";
 
 import {
   generateAIResponse,
+  extractAndSaveUserMemories,
 } from "./services/ai.js";
 
 import {
   registerUser,
   loginUser,
+  handleGoogleAuth,
 } from "./services/auth.js";
 
 import Conversation from "./models/Conversation.js";
+import User from "./models/User.js";
 
 import { protect } from "./middleware/authMiddleware.js";
 
@@ -68,7 +72,10 @@ app.set(
 );
 
 app.use(
-  helmet()
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  })
 );
 
 
@@ -98,30 +105,25 @@ if (
 app.use(
   cors({
     origin(origin, callback) {
-      // Allow server-to-server requests
-      // and tools such as curl in development.
+      // Allow server-to-server requests and tools such as curl in development
       if (!origin) {
         return callback(null, true);
       }
 
+      // Allow any localhost / 127.0.0.1 port in development
       if (
         NODE_ENV !== "production" &&
-        allowedOrigins.length === 0
+        (/^http:\/\/localhost(:\d+)?$/.test(origin) || /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin))
       ) {
         return callback(null, true);
       }
 
-      if (
-        allowedOrigins.includes(origin)
-      ) {
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      return callback(
-        new Error(
-          "CORS policy blocked this origin"
-        )
-      );
+      // Disallow origin gracefully
+      return callback(null, false);
     },
 
     methods: [
@@ -135,6 +137,7 @@ app.use(
       "Content-Type",
       "Authorization",
     ],
+    credentials: true,
   })
 );
 
@@ -315,13 +318,29 @@ app.post(
         .json(result);
 
     } catch (error) {
-      if (
-        error.message ===
-        "User already exists"
-      ) {
+      if (error.message === "User already exists") {
         return res.status(409).json({
-          error:
-            "User already exists",
+          error: "User already exists",
+        });
+      }
+
+      // Return 400 for email validation errors
+      if (
+        error.message.includes("placeholder") ||
+        error.message.includes("email") ||
+        error.message.includes("Email") ||
+        error.message.includes("domain") ||
+        error.message.includes("Gmail") ||
+        error.message.includes("characters") ||
+        error.message.includes("pattern") ||
+        error.message.includes("looks like") ||
+        error.message.includes("real email") ||
+        error.message.includes("trusted providers") ||
+        error.message.includes("approved list") ||
+        error.message.includes("not allowed")
+      ) {
+        return res.status(400).json({
+          error: error.message,
         });
       }
 
@@ -386,6 +405,90 @@ app.post(
       }
 
       next(error);
+    }
+  }
+);
+
+
+// ========================================
+// GOOGLE AUTH (LOGIN OR SIGNUP)
+// ========================================
+
+app.post(
+  "/api/auth/google",
+  authLimiter,
+  async (req, res, next) => {
+    try {
+      const { credential } = req.body || {};
+
+      if (!credential || typeof credential !== "string" || !credential.trim()) {
+        return res.status(400).json({
+          error: "A valid Google ID token credential is required",
+        });
+      }
+
+      const result = await handleGoogleAuth({ credential: credential.trim() });
+      return res.json(result);
+    } catch (error) {
+      if (
+        error.message === "A valid Google ID token credential is required" ||
+        error.message === "Invalid Google credential" ||
+        error.message === "Google credential audience mismatch" ||
+        error.message === "Google account email is required" ||
+        error.message === "Google account email is not verified"
+      ) {
+        return res.status(401).json({
+          error: error.message,
+        });
+      }
+
+      next(error);
+    }
+  }
+);
+
+
+// ========================================
+// GET CURRENT USER
+// ========================================
+
+app.get(
+  "/api/auth/me",
+  protect,
+  async (req, res, next) => {
+    try {
+      const User = (await import("./models/User.js")).default;
+      const user = await User.findById(req.userId).select("-password");
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      return res.json({
+        user: { id: user._id, name: user.name, email: user.email },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+
+// ========================================
+// REFRESH TOKEN
+// ========================================
+
+app.post(
+  "/api/auth/refresh",
+  protect,
+  (req, res) => {
+    try {
+      const newToken = jwt.sign(
+        { userId: req.userId },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+      return res.json({ token: newToken });
+    } catch (error) {
+      return res.status(500).json({ error: "Could not refresh token" });
     }
   }
 );
@@ -709,12 +812,22 @@ app.post(
       let result;
 
       try {
-        result =
-          await generateAIResponse(
-            cleanMessage,
-            interactionToContinue
-          );
+        const chatHistory = conversation.messages.length > 1
+          ? conversation.messages.slice(0, -1)
+          : [];
 
+        const currentUser = await User.findById(req.userId).lean();
+
+        result = await generateAIResponse(
+          cleanMessage,
+          chatHistory,
+          currentUser
+        );
+
+        // Asynchronously extract and persist personal facts for cross-chat memory (non-blocking)
+        extractAndSaveUserMemories(req.userId, cleanMessage).catch((err) =>
+          console.warn("[Memory] Background extraction error:", err.message)
+        );
       } catch (aiError) {
         console.error(
           "Gemini API error:",
@@ -845,6 +958,15 @@ app.use(
       return res.status(403).json({
         error:
           "Origin is not allowed",
+      });
+    }
+
+    if (
+      error.type === "entity.parse.failed" ||
+      (error instanceof SyntaxError && error.status === 400 && "body" in error)
+    ) {
+      return res.status(400).json({
+        error: "Invalid JSON in request payload",
       });
     }
 
