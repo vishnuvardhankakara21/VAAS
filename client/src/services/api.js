@@ -169,9 +169,9 @@ export async function deleteConversation(conversationId) {
 // GENERATE AI IMAGE
 // ============================================================
 
-export async function generateImage(prompt) {
+export async function generateImage(prompt, model = "flux") {
   return authFetch(`${API_URL}/api/image/generate`, {
     method: "POST",
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, model }),
   });
 }

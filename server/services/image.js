@@ -1,19 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 
-const apiKey = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY;
-
-if (!apiKey) {
-  console.warn("WARNING: GEMINI_API_KEY (or GEMINI_IMAGE_API_KEY) is not configured for image generation");
-}
+const geminiApiKey = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY;
 
 const ai = new GoogleGenAI({
-  apiKey: apiKey || "",
+  apiKey: geminiApiKey || "",
 });
 
-/**
- * Candidate models supported by Gemini API for image generation via generateContent.
- */
-const DEFAULT_CANDIDATE_MODELS = [
+const DEFAULT_GEMINI_MODELS = [
   "gemini-2.5-flash-image",
   "gemini-3.1-flash-image",
   "gemini-3.1-flash-lite-image",
@@ -21,20 +14,150 @@ const DEFAULT_CANDIDATE_MODELS = [
 ];
 
 /**
- * Generate an image from a text prompt using Google's Gemini Image Generation models.
- *
- * @param {string} prompt - The user prompt describing the image to generate
- * @param {object} [options] - Optional configurations (aspectRatio, etc.)
- * @returns {Promise<{ imageBase64: string, mimeType: string, model: string, prompt: string }>}
+ * Generate an image using the high-performance FLUX.1 / Ideogram engine (free, Midjourney-grade).
  */
-export async function generateImageFromPrompt(prompt, options = {}) {
-  const currentApiKey = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY;
-  if (!currentApiKey) {
-    const error = new Error("Gemini API key is not configured on the server.");
-    error.status = 500;
-    throw error;
+async function generateWithFluxEngine(prompt, modelStyle = "flux") {
+  const seed = Math.floor(Math.random() * 1000000);
+  const pollinationsModel =
+    modelStyle === "flux-realism" || modelStyle === "photorealistic"
+      ? "flux-realism"
+      : modelStyle === "flux-anime" || modelStyle === "anime"
+      ? "flux-anime"
+      : modelStyle === "flux-3d" || modelStyle === "3d"
+      ? "flux-3d"
+      : modelStyle === "turbo"
+      ? "turbo"
+      : "flux";
+
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+    prompt
+  )}?model=${pollinationsModel}&width=1024&height=1024&nologo=true&seed=${seed}`;
+
+  const headers = {};
+  if (process.env.POLLINATIONS_API_KEY) {
+    headers["Authorization"] = `Bearer ${process.env.POLLINATIONS_API_KEY}`;
   }
 
+  const response = await fetch(url, { headers, redirect: "follow" });
+
+  if (!response.ok) {
+    if (response.status === 402 || response.status === 429) {
+      const errText = await response.text();
+      let retrySeconds = 25;
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed?.error?.message?.includes("Retry after")) {
+          const match = parsed.error.message.match(/after\s+(\d+)s/i);
+          if (match && match[1]) retrySeconds = match[1];
+        }
+      } catch {
+        // ignore JSON parse
+      }
+
+      const error = new Error(
+        `Free generation limit reached (1 image per 45s). Please wait ${retrySeconds} seconds or try again shortly.`
+      );
+      error.status = 429;
+      throw error;
+    }
+
+    throw new Error(`FLUX engine returned status ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  if (buffer.length < 1000) {
+    // If the returned body is suspiciously small, check if it's an error message
+    const textPreview = buffer.toString("utf-8");
+    if (textPreview.includes("error") || textPreview.includes("limit")) {
+      throw new Error("Generation rate limit reached. Please wait a few seconds and try again.");
+    }
+  }
+
+  const contentType = response.headers.get("content-type") || "image/jpeg";
+  const imageBase64 = buffer.toString("base64");
+
+  const displayNameMap = {
+    flux: "FLUX.1 (Midjourney Quality)",
+    "flux-realism": "FLUX Realism (Photorealistic)",
+    "flux-anime": "FLUX Anime (Stylized Art)",
+    "flux-3d": "FLUX 3D (CGI & Render)",
+    turbo: "FLUX Turbo (Ultra Fast)",
+  };
+
+  return {
+    imageBase64,
+    mimeType: contentType.includes("png") ? "image/png" : "image/jpeg",
+    model: displayNameMap[pollinationsModel] || "FLUX.1",
+    prompt,
+  };
+}
+
+/**
+ * Generate an image using Google's Gemini multimodal image generation API.
+ */
+async function generateWithGeminiEngine(prompt) {
+  const currentApiKey = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY;
+  if (!currentApiKey) {
+    throw new Error("Gemini API key is not configured on the server.");
+  }
+
+  const configuredModel = process.env.GEMINI_IMAGE_MODEL?.trim();
+  const candidateModels = configuredModel
+    ? [configuredModel, ...DEFAULT_GEMINI_MODELS.filter((m) => m !== configuredModel)]
+    : DEFAULT_GEMINI_MODELS;
+
+  let lastError = null;
+
+  for (const model of candidateModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+      });
+
+      const parts = response.candidates?.[0]?.content?.parts || response.parts || [];
+      let imageBase64 = null;
+      let mimeType = "image/png";
+
+      for (const part of parts) {
+        if (part.inlineData && part.inlineData.data) {
+          imageBase64 = part.inlineData.data;
+          if (part.inlineData.mimeType) {
+            mimeType = part.inlineData.mimeType;
+          }
+          break;
+        }
+      }
+
+      if (imageBase64) {
+        return {
+          imageBase64,
+          mimeType,
+          model: `Gemini (${model})`,
+          prompt,
+        };
+      }
+    } catch (err) {
+      lastError = err;
+      const msg = err.message || "";
+      if (err.status === 429 || /quota|limit: 0/i.test(msg)) {
+        break; // Don't hammer other Gemini models if free tier quota is 0
+      }
+    }
+  }
+
+  throw lastError || new Error("Gemini image generation unavailable");
+}
+
+/**
+ * Main entry point: Generates an image using the selected engine/model with seamless automatic fallback.
+ *
+ * @param {string} prompt - User prompt description
+ * @param {object} [options] - Options: { model: 'flux' | 'flux-realism' | 'flux-anime' | 'flux-3d' | 'turbo' | 'gemini' }
+ */
+export async function generateImageFromPrompt(prompt, options = {}) {
   if (typeof prompt !== "string" || !prompt.trim()) {
     const error = new Error("Please provide a valid image prompt.");
     error.status = 400;
@@ -48,92 +171,42 @@ export async function generateImageFromPrompt(prompt, options = {}) {
     throw error;
   }
 
-  // Model prioritization: custom env var first, then default candidates
-  const configuredModel = process.env.GEMINI_IMAGE_MODEL?.trim();
-  const candidateModels = configuredModel
-    ? [configuredModel, ...DEFAULT_CANDIDATE_MODELS.filter((m) => m !== configuredModel)]
-    : DEFAULT_CANDIDATE_MODELS;
+  const requestedModel = (options.model || "flux").toLowerCase();
 
-  let lastError = null;
-
-  for (const model of candidateModels) {
+  // If user explicitly selected Gemini, try Gemini first
+  if (requestedModel === "gemini") {
     try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: cleanPrompt,
-      });
-
-      const parts = response.candidates?.[0]?.content?.parts || response.parts || [];
-      let imageBase64 = null;
-      let mimeType = "image/png";
-      let textFeedback = "";
-
-      for (const part of parts) {
-        if (part.inlineData && part.inlineData.data) {
-          imageBase64 = part.inlineData.data;
-          if (part.inlineData.mimeType) {
-            mimeType = part.inlineData.mimeType;
-          }
-          break;
-        } else if (part.text) {
-          textFeedback += part.text + " ";
-        }
-      }
-
-      if (imageBase64) {
-        return {
-          imageBase64,
-          mimeType,
-          model,
-          prompt: cleanPrompt,
-        };
-      }
-
-      // If no inlineData was returned, check if model refused or safety blocked
-      if (textFeedback) {
-        const error = new Error(textFeedback.trim());
-        error.status = 400;
-        throw error;
-      }
-
-      throw new Error("No image was returned by the AI model. Please try a different prompt.");
-    } catch (err) {
-      const message = err.message || "";
-      const status = err.status || 500;
-
-      console.warn(`[Image Generation] Attempt with model '${model}' failed:`, message.slice(0, 200));
-
-      // Check for quota / rate limit errors
-      if (status === 429 || /quota|exceeded|rate limit|resource_exhausted/i.test(message)) {
-        const error = new Error(
-          "AI image generation quota or rate limit has been reached. Please check your Gemini API plan or try again shortly."
-        );
-        error.status = 429;
-        lastError = error;
-        // Don't waste time hammering other models if project quota is exhausted
-        break;
-      }
-
-      // Check for content safety policy violation
-      if (/safety|blocked|policy|inappropriate/i.test(message)) {
-        const error = new Error(
-          "The prompt was flagged by content safety guidelines. Please adjust your prompt and try again."
-        );
-        error.status = 400;
-        lastError = error;
-        break;
-      }
-
-      lastError = err;
+      return await generateWithGeminiEngine(cleanPrompt);
+    } catch (geminiError) {
+      console.warn(
+        "[Image Generation] Gemini engine unavailable (quota/billing limit), falling back to FLUX.1:",
+        geminiError.message
+      );
+      // Seamlessly fall back to FLUX.1
+      const result = await generateWithFluxEngine(cleanPrompt, "flux");
+      result.model += " (Auto-fallback from Gemini)";
+      return result;
     }
   }
 
-  // If all candidate models failed, sanitize error output
-  const finalError = new Error(
-    lastError?.status === 429 || lastError?.status === 400
-      ? lastError.message
-      : "Failed to generate image. Please try again with a different prompt."
-  );
-  finalError.status = lastError?.status || 500;
-  throw finalError;
+  // Otherwise, use the FLUX.1 engine (Midjourney / Ideogram tier)
+  try {
+    return await generateWithFluxEngine(cleanPrompt, requestedModel);
+  } catch (fluxError) {
+    // If FLUX rate limits and Gemini is configured, attempt Gemini as secondary fallback
+    if (geminiApiKey) {
+      try {
+        console.warn("[Image Generation] FLUX limit reached, attempting Gemini secondary fallback...");
+        return await generateWithGeminiEngine(cleanPrompt);
+      } catch {
+        // Fallback also failed, rethrow original error
+      }
+    }
+
+    const error = new Error(
+      fluxError.message || "Failed to generate image. Please wait a few seconds and try again."
+    );
+    error.status = fluxError.status || 500;
+    throw error;
+  }
 }

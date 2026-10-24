@@ -1,6 +1,51 @@
 import { useState, useRef, useEffect } from "react";
 import { generateImage } from "../services/api";
 
+const AVAILABLE_MODELS = [
+  {
+    id: "flux",
+    name: "FLUX.1 Schnell",
+    badge: "Midjourney Quality",
+    desc: "State-of-the-art open model with photorealistic fidelity and prompt adherence.",
+    icon: "🌟",
+  },
+  {
+    id: "flux-realism",
+    name: "FLUX Photorealism",
+    badge: "Hyperrealism",
+    desc: "Engineered for photographic textures, cinematic lighting, and realistic portraits.",
+    icon: "📸",
+  },
+  {
+    id: "flux-3d",
+    name: "FLUX 3D & CGI",
+    badge: "3D Render",
+    desc: "Specialized for isometric assets, 3D characters, and stylized CGI environments.",
+    icon: "🔮",
+  },
+  {
+    id: "flux-anime",
+    name: "FLUX Anime & Art",
+    badge: "Illustration",
+    desc: "Vibrant anime art, digital painting, and dynamic stylized character illustrations.",
+    icon: "🎨",
+  },
+  {
+    id: "turbo",
+    name: "FLUX Turbo",
+    badge: "Fastest",
+    desc: "Ultra-fast generation optimized for rapid concept iterations and quick previews.",
+    icon: "⚡",
+  },
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    badge: "Multimodal AI",
+    desc: "Google AI Studio multimodal image generation with automatic FLUX fallback.",
+    icon: "✦",
+  },
+];
+
 const PROMPT_SUGGESTIONS = [
   {
     icon: "🌌",
@@ -36,6 +81,7 @@ const PROMPT_SUGGESTIONS = [
 
 export default function ImageGenerator({ onBackToChat }) {
   const [prompt, setPrompt] = useState("");
+  const [selectedModel, setSelectedModel] = useState("flux");
   const [loading, setLoading] = useState(false);
   const [generatedResult, setGeneratedResult] = useState(null);
   const [error, setError] = useState(null);
@@ -62,26 +108,66 @@ export default function ImageGenerator({ onBackToChat }) {
     setDownloadSuccess(false);
 
     try {
-      const data = await generateImage(cleanPrompt);
-      if (!data || !data.image) {
-        throw new Error("No image data received from server.");
+      // 1. Attempt backend generation
+      try {
+        const data = await generateImage(cleanPrompt, selectedModel);
+        if (data && data.image) {
+          setGeneratedResult({
+            image: data.image,
+            mimeType: data.mimeType || "image/jpeg",
+            prompt: cleanPrompt,
+            model: data.model || selectedModel,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          });
+
+          setTimeout(() => {
+            previewRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }, 100);
+          return;
+        }
+      } catch (backendErr) {
+        // 2. If backend is rate-limited (e.g. 429), attempt client-side generation via Puter.js if available
+        if (window.puter?.ai?.txt2img) {
+          console.warn("Backend rate limit encountered. Falling back to in-browser generation via Puter.js...");
+          const imgElem = await window.puter.ai.txt2img(cleanPrompt);
+          if (imgElem && imgElem.src) {
+            let base64 = "";
+            let mimeType = "image/png";
+
+            if (imgElem.src.startsWith("data:")) {
+              const [header, data] = imgElem.src.split(",");
+              base64 = data;
+              mimeType = header.match(/:(.*?);/)?.[1] || "image/png";
+            } else {
+              const res = await fetch(imgElem.src);
+              const blob = await res.blob();
+              const reader = new FileReader();
+              base64 = await new Promise((resolve) => {
+                reader.onloadend = () => resolve(reader.result.split(",")[1]);
+                reader.readAsDataURL(blob);
+              });
+              mimeType = blob.type || "image/png";
+            }
+
+            setGeneratedResult({
+              image: base64,
+              mimeType,
+              prompt: cleanPrompt,
+              model: "FLUX.1 (Direct Client)",
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            });
+
+            setTimeout(() => {
+              previewRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }, 100);
+            return;
+          }
+        }
+        throw backendErr;
       }
-
-      setGeneratedResult({
-        image: data.image,
-        mimeType: data.mimeType || "image/png",
-        prompt: cleanPrompt,
-        model: data.model || "Gemini Image",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      });
-
-      // Smooth scroll to preview on mobile/smaller screens
-      setTimeout(() => {
-        previewRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 100);
     } catch (err) {
       console.error("Image generation failed:", err);
-      setError(err.message || "Failed to generate image. Please try again.");
+      setError(err.message || "Failed to generate image. Please try again in a few moments.");
     } finally {
       setLoading(false);
     }
@@ -159,7 +245,7 @@ export default function ImageGenerator({ onBackToChat }) {
           </div>
           <h2 className="image-studio-heading">Transform Words into Visuals</h2>
           <p className="image-studio-subheading">
-            Powered by Google Gemini. Describe your idea in detail, and VAAS will bring it to life.
+            Powered by <strong>FLUX.1</strong> and <strong>Google Gemini</strong>. Choose your model, describe your vision, and generate studio-grade art.
           </p>
         </div>
 
@@ -183,6 +269,37 @@ export default function ImageGenerator({ onBackToChat }) {
         {/* Left Column: Creator Controls */}
         <div className="image-studio-controls">
           <form className="image-prompt-form" onSubmit={handleGenerate}>
+
+            {/* Model & Style Selector */}
+            <div className="model-selector-panel">
+              <div className="model-selector-header">
+                <span className="model-selector-title">AI Engine & Style</span>
+                <span className="model-selector-indicator">
+                  Active: {AVAILABLE_MODELS.find((m) => m.id === selectedModel)?.name}
+                </span>
+              </div>
+
+              <div className="model-chips-row">
+                {AVAILABLE_MODELS.map((model) => (
+                  <button
+                    key={model.id}
+                    type="button"
+                    className={`model-chip ${selectedModel === model.id ? "active" : ""}`}
+                    onClick={() => setSelectedModel(model.id)}
+                    disabled={loading}
+                    title={model.desc}
+                  >
+                    <span className="model-chip-icon">{model.icon}</span>
+                    <div className="model-chip-info">
+                      <span className="model-chip-name">{model.name}</span>
+                      <span className="model-chip-badge">{model.badge}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Prompt Textarea Panel */}
             <div className="image-input-panel">
               <div className="image-input-header">
                 <label htmlFor="image-prompt-input" className="image-input-label">
@@ -201,7 +318,7 @@ export default function ImageGenerator({ onBackToChat }) {
                 id="image-prompt-input"
                 ref={textareaRef}
                 className="image-prompt-textarea"
-                placeholder="Describe the image you want to generate in detail (e.g., lighting, perspective, style, mood)..."
+                placeholder="Describe your scene in detail (e.g. lighting, perspective, colors, atmosphere, art style)..."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value.slice(0, 2000))}
                 onKeyDown={handleKeyDown}
@@ -240,7 +357,7 @@ export default function ImageGenerator({ onBackToChat }) {
                   </svg>
                 </div>
                 <div className="error-body">
-                  <span className="error-title">Generation Error</span>
+                  <span className="error-title">Notice</span>
                   <p className="error-text">{error}</p>
                 </div>
                 <button
@@ -271,7 +388,7 @@ export default function ImageGenerator({ onBackToChat }) {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                   </svg>
-                  <span>Generate Image</span>
+                  <span>Generate with {AVAILABLE_MODELS.find((m) => m.id === selectedModel)?.name}</span>
                 </>
               )}
             </button>
@@ -337,9 +454,9 @@ export default function ImageGenerator({ onBackToChat }) {
                     </div>
                   </div>
                   <div className="loading-text-group">
-                    <h3 className="loading-title">Generating your masterpiece</h3>
+                    <h3 className="loading-title">Generating your visual</h3>
                     <p className="loading-desc">
-                      Communicating with Gemini AI... Rendering pixels and optimizing lighting.
+                      Synthesizing details with {AVAILABLE_MODELS.find((m) => m.id === selectedModel)?.name}... Rendering pixels and optimizing composition.
                     </p>
                   </div>
                 </div>
@@ -431,12 +548,12 @@ export default function ImageGenerator({ onBackToChat }) {
                   </div>
                   <h3 className="empty-title">Your Canvas Awaits</h3>
                   <p className="empty-description">
-                    Enter a creative prompt or pick one of the inspirations on the left to generate high-fidelity AI imagery.
+                    Select a model style, enter a prompt, or click an inspiration chip to generate Midjourney-grade imagery.
                   </p>
                   <div className="empty-features">
-                    <span className="feature-pill">⚡ Fast Generation</span>
-                    <span className="feature-pill">🎯 Native Download</span>
-                    <span className="feature-pill">✨ Gemini Multimodal</span>
+                    <span className="feature-pill">🌟 FLUX.1 (Midjourney Quality)</span>
+                    <span className="feature-pill">📸 Photorealism</span>
+                    <span className="feature-pill">🎨 Anime & 3D</span>
                   </div>
                 </div>
               )}

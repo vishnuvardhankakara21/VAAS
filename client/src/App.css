@@ -3031,6 +3031,104 @@ html.dark-mode, html.dark-mode body { background: var(--bg-base); }
   gap: 16px;
 }
 
+/* ────────────────────────────────────────────────────────────────
+   MODEL & STYLE SELECTOR
+──────────────────────────────────────────────────────────────── */
+
+.model-selector-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.model-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.model-selector-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.model-selector-indicator {
+  font-size: 11px;
+  color: var(--accent-light);
+  font-weight: 500;
+}
+
+.model-chips-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.model-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: left;
+}
+
+.model-chip:hover {
+  background: var(--bg-surface-3);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+.model-chip.active {
+  background: var(--accent-ultra);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.model-chip-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.model-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.model-chip-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-chip-badge {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-chip.active .model-chip-badge {
+  color: var(--accent-light);
+}
+
 .image-input-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border);

@@ -958,7 +958,7 @@ app.post(
 
   async (req, res, next) => {
     try {
-      const { prompt } = req.body;
+      const { prompt, model } = req.body;
 
       if (typeof prompt !== "string") {
         return res.status(400).json({
@@ -980,7 +980,7 @@ app.post(
         });
       }
 
-      const result = await generateImageFromPrompt(cleanPrompt);
+      const result = await generateImageFromPrompt(cleanPrompt, { model });
 
       return res.json({
         success: true,
