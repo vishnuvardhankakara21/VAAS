@@ -16,6 +16,10 @@ import {
 } from "./services/ai.js";
 
 import {
+  generateImageFromPrompt,
+} from "./services/image.js";
+
+import {
   registerUser,
   loginUser,
   handleGoogleAuth,
@@ -207,6 +211,24 @@ const chatLimiter =
     message: {
       error:
         "Too many messages. Please slow down and try again shortly.",
+    },
+  });
+
+
+const imageLimiter =
+  rateLimit({
+    windowMs:
+      60 * 1000,
+
+    limit: 10,
+
+    standardHeaders: true,
+
+    legacyHeaders: false,
+
+    message: {
+      error:
+        "Too many image generation requests. Please slow down and try again shortly.",
     },
   });
 
@@ -920,6 +942,61 @@ app.post(
 
     } catch (error) {
       next(error);
+    }
+  }
+);
+
+
+// ========================================
+// IMAGE GENERATION
+// ========================================
+
+app.post(
+  "/api/image/generate",
+  protect,
+  imageLimiter,
+
+  async (req, res, next) => {
+    try {
+      const { prompt } = req.body;
+
+      if (typeof prompt !== "string") {
+        return res.status(400).json({
+          error: "Prompt must be a string",
+        });
+      }
+
+      const cleanPrompt = prompt.trim();
+
+      if (cleanPrompt.length === 0) {
+        return res.status(400).json({
+          error: "Prompt cannot be empty",
+        });
+      }
+
+      if (cleanPrompt.length > 2000) {
+        return res.status(400).json({
+          error: "Prompt is too long. Maximum 2,000 characters.",
+        });
+      }
+
+      const result = await generateImageFromPrompt(cleanPrompt);
+
+      return res.json({
+        success: true,
+        image: result.imageBase64,
+        mimeType: result.mimeType,
+        model: result.model,
+        prompt: result.prompt,
+      });
+
+    } catch (error) {
+      console.error("Image generation error:", error.message);
+
+      const status = error.status || 500;
+      return res.status(status).json({
+        error: error.message || "Failed to generate image. Please try again later.",
+      });
     }
   }
 );

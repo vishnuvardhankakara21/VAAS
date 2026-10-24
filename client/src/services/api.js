@@ -163,3 +163,15 @@ export async function deleteConversation(conversationId) {
     method: "DELETE",
   });
 }
+
+
+// ============================================================
+// GENERATE AI IMAGE
+// ============================================================
+
+export async function generateImage(prompt) {
+  return authFetch(`${API_URL}/api/image/generate`, {
+    method: "POST",
+    body: JSON.stringify({ prompt }),
+  });
+}

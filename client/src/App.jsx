@@ -5,6 +5,7 @@ import Register from "./components/Register";
 import ConversationSidebar from "./components/ConversationSidebar";
 import MessageContent from "./components/MessageContent";
 import Settings from "./components/Settings";
+import ImageGenerator from "./components/ImageGenerator";
 
 import { sendChatMessage, getConversation, refreshToken } from "./services/api";
 
@@ -50,6 +51,7 @@ function App() {
   });
 
   const [authView, setAuthView] = useState("login"); // "login" | "register"
+  const [activeView, setActiveView] = useState("chat"); // "chat" | "image"
 
 
   // ──────────────────────────────────────────────────────────
@@ -226,6 +228,7 @@ function App() {
 
   function handleNewChat() {
     if (loading || regenerating) return;
+    setActiveView("chat");
     resetChatState();
   }
 
@@ -236,6 +239,7 @@ function App() {
 
   async function handleSelectConversation(conversationId) {
     if (loading || regenerating) return;
+    setActiveView("chat");
 
     try {
       setLoading(true);
@@ -500,6 +504,13 @@ function App() {
           user={user}
           onOpenSettings={() => setShowSettings(true)}
           onLogout={handleLogout}
+          activeView={activeView}
+          onSelectView={(view) => {
+            setActiveView(view);
+            if (window.innerWidth <= 768) {
+              setMobileSidebarOpen(false);
+            }
+          }}
           onToggleSidebar={() => {
             if (window.innerWidth <= 768) {
               setMobileSidebarOpen(false);
@@ -544,8 +555,40 @@ function App() {
               <div className="chat-header-logo">✦</div>
               <div>
                 <h1 className="chat-header-title">VAAS</h1>
-                <p className="chat-header-subtitle">AI Assistant</p>
+                <p className="chat-header-subtitle">
+                  {activeView === "image" ? "AI Image Studio" : "AI Assistant"}
+                </p>
               </div>
+            </div>
+          </div>
+
+          <div className="chat-header-center">
+            <div className="header-nav-pill">
+              <button
+                type="button"
+                className={`header-nav-btn ${activeView === "chat" ? "active" : ""}`}
+                onClick={() => setActiveView("chat")}
+                id="header-tab-chat"
+                title="Switch to Chat"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span>Chat</span>
+              </button>
+              <button
+                type="button"
+                className={`header-nav-btn ${activeView === "image" ? "active" : ""}`}
+                onClick={() => setActiveView("image")}
+                id="header-tab-image"
+                title="Switch to Image Studio"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <span>Image Studio</span>
+                <span className="header-nav-sparkle" />
+              </button>
             </div>
           </div>
 
@@ -575,8 +618,12 @@ function App() {
         </header>
 
 
-        {/* Messages */}
-        <div className="messages-area" id="messages-area">
+        {activeView === "image" ? (
+          <ImageGenerator onBackToChat={() => setActiveView("chat")} />
+        ) : (
+          <>
+            {/* Messages */}
+            <div className="messages-area" id="messages-area">
 
           {messages.length === 0 ? (
             <div className="welcome-screen">
@@ -775,6 +822,8 @@ function App() {
             </p>
           </form>
         </div>
+          </>
+        )}
 
       </main>
 
