@@ -204,7 +204,7 @@ function App() {
 
 
   // ──────────────────────────────────────────────────────────
-  // VOICE SPEECH RECOGNITION (BULLETPROOF PERSISTENT INSTANCE)
+  // VOICE SPEECH RECOGNITION (REAL-TIME LIVE TYPING)
   // ──────────────────────────────────────────────────────────
 
   const inputRef = useRef(input);
@@ -212,43 +212,60 @@ function App() {
     inputRef.current = input;
   }, [input]);
 
-  const createRecognition = useCallback(() => {
+  const startVoiceRecording = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return null;
+    if (!SpeechRecognition) {
+      alert("Voice speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.");
+      return;
+    }
 
     try {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (_) {}
+      }
+
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
       recognition.lang = navigator.language || "en-US";
 
+      const startInput = inputRef.current || "";
+      let previousFinals = "";
+
       recognition.onstart = () => {
         isListeningRef.current = true;
         setIsListening(true);
       };
 
+      // LIVE REAL-TIME TYPING AS THE USER SPEAKS
       recognition.onresult = (event) => {
-        let finalTranscript = "";
-        let interimTranscript = "";
+        let currentInterim = "";
+        let currentFinal = "";
 
-        for (let i = 0; i < event.results.length; i++) {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
           const item = event.results[i];
           if (item && item[0]) {
             if (item.isFinal) {
-              finalTranscript += item[0].transcript + " ";
+              currentFinal += item[0].transcript + " ";
             } else {
-              interimTranscript += item[0].transcript;
+              currentInterim += item[0].transcript;
             }
           }
         }
 
-        const spoken = (finalTranscript + interimTranscript).trim();
-        const base = voiceBaseInputRef.current ? voiceBaseInputRef.current.trim() : "";
-        const combined = base ? `${base} ${spoken}` : spoken;
+        if (currentFinal) {
+          previousFinals += currentFinal;
+        }
 
+        const totalSpoken = (previousFinals + currentInterim).trim();
+        const separator = startInput && !startInput.endsWith(" ") ? " " : "";
+        const combined = startInput ? `${startInput}${separator}${totalSpoken}` : totalSpoken;
+
+        // 1. Update React state
         setInput(combined);
 
+        // 2. Directly update DOM textarea for instantaneous, zero-latency visual typing
         if (textareaRef.current) {
           textareaRef.current.value = combined;
           textareaRef.current.style.height = "auto";
@@ -259,40 +276,46 @@ function App() {
 
       recognition.onerror = (event) => {
         console.warn("Speech recognition error:", event.error);
-        if (event.error === "no-speech") return; // Keep listening through pauses
+        if (event.error === "no-speech") {
+          // Normal pause in speech — keep listening
+          return;
+        }
         if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-          alert("Microphone permission was denied. Please allow microphone access in your browser to speak to VAAS.");
+          alert("Microphone permission was denied. Please allow microphone access in your browser settings to speak to VAAS.");
         }
         isListeningRef.current = false;
         setIsListening(false);
       };
 
       recognition.onend = () => {
+        // If user didn't explicitly click stop, seamlessly restart to keep continuous typing active
         if (isListeningRef.current) {
-          // Attempt restart if Chrome stopped after silence
           try {
-            recognition.start();
+            startVoiceRecording();
             return;
-          } catch (_) {}
+          } catch (_) {
+            isListeningRef.current = false;
+            setIsListening(false);
+          }
+        } else {
+          isListeningRef.current = false;
+          setIsListening(false);
         }
-        setIsListening(false);
-        isListeningRef.current = false;
       };
 
-      return recognition;
+      recognitionRef.current = recognition;
+      recognition.start();
+      isListeningRef.current = true;
+      setIsListening(true);
     } catch (err) {
-      console.warn("Could not create SpeechRecognition:", err);
-      return null;
+      console.error("Speech recognition start failed:", err);
+      alert("Could not start speech recognition: " + (err.message || "Please check microphone permissions."));
+      isListeningRef.current = false;
+      setIsListening(false);
     }
   }, []);
 
   const handleToggleVoice = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Voice speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.");
-      return;
-    }
-
     if (isListeningRef.current) {
       isListeningRef.current = false;
       setIsListening(false);
@@ -304,39 +327,15 @@ function App() {
       return;
     }
 
-    voiceBaseInputRef.current = inputRef.current;
-
-    // Direct synchronous invocation to maintain user gesture activation
-    try {
-      if (!recognitionRef.current) {
-        recognitionRef.current = createRecognition();
-      }
-      if (recognitionRef.current) {
-        recognitionRef.current.start();
-        isListeningRef.current = true;
-        setIsListening(true);
-      }
-    } catch (err) {
-      console.warn("Primary start failed, recreating instance:", err);
-      try {
-        recognitionRef.current = createRecognition();
-        recognitionRef.current?.start();
-        isListeningRef.current = true;
-        setIsListening(true);
-      } catch (retryErr) {
-        console.error("Speech recognition could not be started:", retryErr);
-        isListeningRef.current = false;
-        setIsListening(false);
-      }
-    }
-  }, [createRecognition]);
+    startVoiceRecording();
+  }, [startVoiceRecording]);
 
   useEffect(() => {
     return () => {
       isListeningRef.current = false;
       if (recognitionRef.current) {
         try {
-          recognitionRef.current.stop();
+          recognitionRef.current.abort();
         } catch (_) {}
       }
     };
