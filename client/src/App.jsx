@@ -111,6 +111,7 @@ function App() {
 
   // Voice speech-to-text recording state
   const [isListening, setIsListening] = useState(false);
+  const isListeningRef = useRef(false);
   const recognitionRef = useRef(null);
   const voiceBaseInputRef = useRef("");
 
@@ -206,14 +207,16 @@ function App() {
   // VOICE SPEECH RECOGNITION (BULLETPROOF LIVE TRANSCRIPT)
   // ──────────────────────────────────────────────────────────
 
-  const handleToggleVoice = useCallback(() => {
+  const handleToggleVoice = useCallback(async () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Voice speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.");
       return;
     }
 
-    if (isListening) {
+    // Toggle OFF if already listening
+    if (isListeningRef.current) {
+      isListeningRef.current = false;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -223,16 +226,38 @@ function App() {
       return;
     }
 
+    // Step 1: Prompt for browser microphone permissions if not yet granted
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Immediately release the audio stream once permission is confirmed
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (permErr) {
+        console.warn("Microphone permission check:", permErr);
+        if (permErr.name === "NotAllowedError" || permErr.name === "PermissionDeniedError") {
+          alert("Microphone permission was denied. Please click the camera/mic icon in your browser address bar to allow microphone access.");
+          return;
+        }
+      }
+    }
+
+    // Step 2: Initialize SpeechRecognition with continuous live streaming
     try {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = "en-US";
       recognition.maxAlternatives = 1;
 
+      // Match system / browser locale for accurate transcription
+      const detectedLocale = navigator.language || navigator.userLanguage || "en-US";
+      recognition.lang = detectedLocale;
+
       voiceBaseInputRef.current = input;
+      isListeningRef.current = true;
+      setIsListening(true);
 
       recognition.onstart = () => {
+        isListeningRef.current = true;
         setIsListening(true);
       };
 
@@ -242,10 +267,12 @@ function App() {
 
         for (let i = 0; i < event.results.length; i++) {
           const item = event.results[i];
-          if (item.isFinal) {
-            finalTranscript += item[0].transcript + " ";
-          } else {
-            interimTranscript += item[0].transcript;
+          if (item && item[0]) {
+            if (item.isFinal) {
+              finalTranscript += item[0].transcript + " ";
+            } else {
+              interimTranscript += item[0].transcript;
+            }
           }
         }
 
@@ -253,24 +280,39 @@ function App() {
         const base = voiceBaseInputRef.current ? voiceBaseInputRef.current.trim() : "";
         const combined = base ? `${base} ${spoken}` : spoken;
 
+        // Update React state
         setInput(combined);
 
-        // Auto-expand textarea to fit new spoken text
+        // Directly update textarea DOM element to guarantee instant render
         if (textareaRef.current) {
+          textareaRef.current.value = combined;
           textareaRef.current.style.height = "auto";
           textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+          textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
         }
       };
 
       recognition.onerror = (event) => {
         console.warn("Speech recognition error:", event.error);
+        if (event.error === "no-speech") {
+          // Normal pause in speech — keep listening
+          return;
+        }
         if (event.error === "not-allowed" || event.error === "service-not-allowed") {
           alert("Microphone permission was denied. Please allow microphone access in your browser settings to speak to VAAS.");
         }
+        isListeningRef.current = false;
         setIsListening(false);
       };
 
       recognition.onend = () => {
+        // If still listening (e.g. Chrome silent pause timeout), restart recognition
+        if (isListeningRef.current) {
+          try {
+            recognition.start();
+            return;
+          } catch (_) {}
+        }
         setIsListening(false);
       };
 
@@ -278,12 +320,14 @@ function App() {
       recognition.start();
     } catch (err) {
       console.error("Speech recognition start failed:", err);
+      isListeningRef.current = false;
       setIsListening(false);
     }
-  }, [isListening, input]);
+  }, [input]);
 
   useEffect(() => {
     return () => {
+      isListeningRef.current = false;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -497,10 +541,13 @@ function App() {
     const trimmed = input.trim();
     if (!trimmed || loading || regenerating) return;
 
-    if (isListening && recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (_) {}
+    if (isListeningRef.current) {
+      isListeningRef.current = false;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (_) {}
+      }
       setIsListening(false);
     }
 
@@ -1035,6 +1082,22 @@ function App() {
               </div>
               <button type="button" className="edit-bar-cancel" onClick={handleCancelEdit}>
                 Cancel
+              </button>
+            </div>
+          )}
+
+          {/* Voice Listening Live Banner */}
+          {isListening && (
+            <div className="voice-listening-indicator" role="status" aria-live="polite">
+              <span className="voice-pulse-dot" />
+              <span>Listening... Speak into your microphone</span>
+              <button
+                type="button"
+                className="voice-done-btn"
+                onClick={handleToggleVoice}
+                title="Finish speaking"
+              >
+                Done ✓
               </button>
             </div>
           )}
