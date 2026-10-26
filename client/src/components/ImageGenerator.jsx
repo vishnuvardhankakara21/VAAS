@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { generateImage } from "../services/api";
+import VaasLogo from "./VaasLogo";
 
 const AVAILABLE_MODELS = [
   {
@@ -42,7 +43,7 @@ const AVAILABLE_MODELS = [
     name: "Google Gemini",
     badge: "Multimodal AI",
     desc: "Google AI Studio multimodal image generation with automatic FLUX fallback.",
-    icon: "✦",
+    icon: "💎",
   },
 ];
 
@@ -240,7 +241,9 @@ export default function ImageGenerator({ onBackToChat }) {
       <div className="image-studio-header">
         <div className="image-studio-title-block">
           <div className="image-studio-badge">
-            <span className="badge-sparkle">✦</span>
+            <span className="badge-sparkle">
+              <VaasLogo size={12} />
+            </span>
             <span>AI Image Studio</span>
           </div>
           <h2 className="image-studio-heading">Transform Words into Visuals</h2>
@@ -450,7 +453,9 @@ export default function ImageGenerator({ onBackToChat }) {
                       <div className="portal-ring ring-1" />
                       <div className="portal-ring ring-2" />
                       <div className="portal-ring ring-3" />
-                      <div className="portal-core">✦</div>
+                      <div className="portal-core">
+                        <VaasLogo size={18} />
+                      </div>
                     </div>
                   </div>
                   <div className="loading-text-group">
@@ -539,7 +544,9 @@ export default function ImageGenerator({ onBackToChat }) {
               {!loading && !generatedResult && (
                 <div className="preview-empty-state">
                   <div className="empty-icon-shield">
-                    <div className="empty-sparkle">✦</div>
+                    <div className="empty-sparkle">
+                      <VaasLogo size={12} />
+                    </div>
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
                       <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
                       <circle cx="8.5" cy="8.5" r="1.5"/>

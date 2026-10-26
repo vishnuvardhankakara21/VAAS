@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { loginUser, signInWithGoogle } from "../services/api";
+import VaasLogo from "./VaasLogo";
 
 function Login({ onLogin, onSwitchToRegister }) {
   const [email, setEmail] = useState("");
@@ -137,8 +138,11 @@ function Login({ onLogin, onSwitchToRegister }) {
     <div className="auth-card">
       {/* Logo */}
       <div className="auth-logo">
-        <div className="auth-logo-icon">✦</div>
+        <div className="auth-logo-icon">
+          <VaasLogo size={22} />
+        </div>
         <span className="auth-logo-text">VAAS</span>
+        <span className="auth-logo-tag">AI 2.0</span>
       </div>
 
       <h1 className="auth-title">Welcome back</h1>

@@ -6,6 +6,7 @@ import ConversationSidebar from "./components/ConversationSidebar";
 import MessageContent from "./components/MessageContent";
 import Settings from "./components/Settings";
 import ImageGenerator from "./components/ImageGenerator";
+import VaasLogo from "./components/VaasLogo";
 
 import { sendChatMessage, getConversation, refreshToken } from "./services/api";
 
@@ -437,12 +438,42 @@ function App() {
   // ──────────────────────────────────────────────────────────
 
   const suggestions = [
-    { icon: "🧠", text: "Explain quantum computing simply" },
-    { icon: "💻", text: "Write a Python web scraper" },
-    { icon: "✍️", text: "Help me write a cover letter" },
-    { icon: "📐", text: "Solve this math problem step by step" },
-    { icon: "🌍", text: "Summarize the history of the internet" },
-    { icon: "🎯", text: "Create a 30-day study plan" },
+    {
+      icon: "💻",
+      category: "Code & Architecture",
+      title: "Full-Stack REST API",
+      text: "Design a production-ready Node.js REST API with rate limiting and JWT auth",
+    },
+    {
+      icon: "⚡",
+      category: "Performance",
+      title: "Debug & Optimize",
+      text: "Analyze this JavaScript performance bottleneck and suggest optimizations",
+    },
+    {
+      icon: "🧠",
+      category: "Deep Concepts",
+      title: "Quantum Computing",
+      text: "Explain quantum superposition and entanglement using intuitive physical analogies",
+    },
+    {
+      icon: "📊",
+      category: "Data & Systems",
+      title: "System Design",
+      text: "Architect a real-time collaborative document editing engine like Google Docs",
+    },
+    {
+      icon: "✍️",
+      category: "Technical Writing",
+      title: "Executive Summary",
+      text: "Draft an executive summary and architectural decision record for a cloud migration",
+    },
+    {
+      icon: "🎯",
+      category: "Strategy & Planning",
+      title: "30-Day Sprint Plan",
+      text: "Create a structured 30-day technical sprint roadmap with weekly milestones",
+    },
   ];
 
 
@@ -453,14 +484,18 @@ function App() {
   if (!user) {
     return (
       <div className="auth-page">
-        {/* Animated background */}
+        {/* Clean architectural background */}
         <div className="auth-bg">
-          <div className="auth-orb auth-orb-1" />
-          <div className="auth-orb auth-orb-2" />
-          <div className="auth-orb auth-orb-3" />
+          <div className="auth-grid-pattern" />
+          <div className="auth-ambient-glow" />
+          <div className="auth-radial-vignette" />
         </div>
 
         <div className="auth-container">
+          <div className="auth-top-badge">
+            <span className="auth-badge-dot" />
+            <span>Next-Generation AI Workspace</span>
+          </div>
           {authView === "login" ? (
             <Login
               onLogin={handleLogin}
@@ -552,11 +587,16 @@ function App() {
             </button>
 
             <div className="chat-header-brand">
-              <div className="chat-header-logo">✦</div>
+              <div className="chat-header-logo">
+                <VaasLogo size={18} />
+              </div>
               <div>
-                <h1 className="chat-header-title">VAAS</h1>
+                <div className="chat-header-title-row">
+                  <h1 className="chat-header-title">VAAS</h1>
+                  <span className="chat-header-badge">AI 2.0</span>
+                </div>
                 <p className="chat-header-subtitle">
-                  {activeView === "image" ? "AI Image Studio" : "AI Assistant"}
+                  {activeView === "image" ? "FLUX & Gemini Studio" : "Intelligence Workspace"}
                 </p>
               </div>
             </div>
@@ -595,7 +635,7 @@ function App() {
           <div className="chat-header-right">
             <div className="header-status">
               <span className="status-dot" />
-              <span className="status-text">Online</span>
+              <span className="status-text">Connected</span>
             </div>
 
             <div className="header-avatar" title={user.name}>
@@ -627,27 +667,45 @@ function App() {
 
           {messages.length === 0 ? (
             <div className="welcome-screen">
-              <div className="welcome-icon-wrapper">
-                <div className="welcome-icon">✦</div>
-                <div className="welcome-icon-ring" />
+              <div className="welcome-hero-badge">
+                <span className="welcome-hero-dot" />
+                <span>VAAS Intelligence Engine • Gemini Powered</span>
               </div>
 
-              <h2 className="welcome-title">Hello, {user.name.split(" ")[0]} 👋</h2>
+              <div className="welcome-icon-wrapper">
+                <div className="welcome-icon">
+                  <VaasLogo size={36} />
+                </div>
+              </div>
+
+              <h2 className="welcome-title">
+                Hello, <span className="welcome-name">{user.name.split(" ")[0]}</span> 👋
+              </h2>
               <p className="welcome-subtitle">
-                I&apos;m VAAS, your intelligent AI assistant.<br />
-                What would you like to explore today?
+                Engineered for deep reasoning, full-stack programming, and creative generation.<br />
+                Select a curated prompt or type below to begin.
               </p>
 
               <div className="suggestion-grid">
                 {suggestions.map((s, i) => (
                   <button
                     key={i}
-                    className="suggestion-chip"
+                    className="suggestion-card"
                     onClick={() => setInput(s.text)}
                     type="button"
                   >
-                    <span className="suggestion-chip-icon">{s.icon}</span>
-                    <span className="suggestion-chip-text">{s.text}</span>
+                    <div className="suggestion-card-header">
+                      <span className="suggestion-card-icon">{s.icon}</span>
+                      <span className="suggestion-card-category">{s.category}</span>
+                      <span className="suggestion-card-arrow">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                          <polyline points="12 5 19 12 12 19" />
+                        </svg>
+                      </span>
+                    </div>
+                    <div className="suggestion-card-title">{s.title}</div>
+                    <div className="suggestion-card-text">{s.text}</div>
                   </button>
                 ))}
               </div>
@@ -665,13 +723,18 @@ function App() {
                   >
                     {/* Avatar */}
                     <div className={`msg-avatar ${isUser ? "user-avatar" : "ai-avatar"}`}>
-                      {isUser ? userInitial : "✦"}
+                      {isUser ? userInitial : <VaasLogo size={16} />}
                     </div>
 
                     {/* Bubble */}
                     <div className={`msg-bubble ${isUser ? "user-bubble" : "ai-bubble"}`}>
-                      <div className="msg-author">
-                        {isUser ? user.name : "VAAS"}
+                      <div className="msg-header-bar">
+                        <div className="msg-author">
+                          {isUser ? user.name : "VAAS Assistant"}
+                        </div>
+                        {!isUser && (
+                          <span className="msg-model-tag">Gemini 2.5 Flash</span>
+                        )}
                       </div>
 
                       <div className="msg-content">
@@ -747,9 +810,14 @@ function App() {
           {/* Typing indicator */}
           {(loading || regenerating) && (
             <div className="message-row ai-row">
-              <div className="msg-avatar ai-avatar">✦</div>
+              <div className="msg-avatar ai-avatar">
+                <VaasLogo size={16} />
+              </div>
               <div className="msg-bubble ai-bubble">
-                <div className="msg-author">VAAS</div>
+                <div className="msg-header-bar">
+                  <div className="msg-author">VAAS Assistant</div>
+                  <span className="msg-model-tag">Thinking...</span>
+                </div>
                 <div className="typing-indicator">
                   <span /><span /><span />
                 </div>
@@ -782,44 +850,66 @@ function App() {
 
           <form className="input-form" onSubmit={handleSendMessage}>
             <div className="input-box">
-              <textarea
-                ref={textareaRef}
-                className="chat-textarea"
-                id="chat-input"
-                placeholder={editingMessageIndex !== null ? "Edit your message..." : "Message VAAS..."}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={loading || regenerating}
-                rows={1}
-                aria-label="Message input"
-              />
-
-              <button
-                type="submit"
-                className={`send-btn ${input.trim() && !loading && !regenerating ? "send-btn-active" : ""}`}
-                id="send-btn"
-                disabled={loading || regenerating || !input.trim()}
-                aria-label="Send message"
-              >
-                {loading || regenerating ? (
-                  <span className="send-spinner" />
-                ) : editingMessageIndex !== null ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="19" x2="12" y2="5"/>
-                    <polyline points="5 12 12 5 19 12"/>
-                  </svg>
+              <div className="input-box-header">
+                <div className="input-model-pill">
+                  <span className="input-model-dot" />
+                  <span>Gemini 2.5 Flash</span>
+                </div>
+                {input.trim() && !loading && (
+                  <button
+                    type="button"
+                    className="input-clear-btn"
+                    onClick={() => setInput("")}
+                    title="Clear input"
+                  >
+                    Clear
+                  </button>
                 )}
-              </button>
+              </div>
+
+              <div className="input-box-main">
+                <textarea
+                  ref={textareaRef}
+                  className="chat-textarea"
+                  id="chat-input"
+                  placeholder={editingMessageIndex !== null ? "Edit your message..." : "Ask VAAS anything or describe code to generate..."}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={loading || regenerating}
+                  rows={1}
+                  aria-label="Message input"
+                />
+
+                <button
+                  type="submit"
+                  className={`send-btn ${input.trim() && !loading && !regenerating ? "send-btn-active" : ""}`}
+                  id="send-btn"
+                  disabled={loading || regenerating || !input.trim()}
+                  aria-label="Send message"
+                  title="Send message (Enter)"
+                >
+                  {loading || regenerating ? (
+                    <span className="send-spinner" />
+                  ) : editingMessageIndex !== null ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="12" y1="19" x2="12" y2="5"/>
+                      <polyline points="5 12 12 5 19 12"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <p className="input-hint">
-              Press <kbd>Enter</kbd> to send &nbsp;·&nbsp; <kbd>Shift+Enter</kbd> for new line
-            </p>
+            <div className="input-footer-row">
+              <span className="input-hint">
+                <kbd>Enter ↵</kbd> send &nbsp;·&nbsp; <kbd>Shift + Enter</kbd> new line
+              </span>
+            </div>
           </form>
         </div>
           </>

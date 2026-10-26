@@ -1,3 +1,5 @@
+import VaasLogo from "./VaasLogo";
+
 function Settings({ user, darkMode, onToggleTheme, onLogout, onClose }) {
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || "U";
 
@@ -70,7 +72,9 @@ function Settings({ user, darkMode, onToggleTheme, onLogout, onClose }) {
         <div className="settings-section">
           <h3 className="settings-section-title">About</h3>
           <div className="settings-about-card">
-            <div className="settings-about-logo">✦</div>
+            <div className="settings-about-logo">
+              <VaasLogo size={16} />
+            </div>
             <div>
               <strong>VAAS AI Assistant</strong>
               <span>Powered by Google Gemini</span>

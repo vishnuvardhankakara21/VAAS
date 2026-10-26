@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getConversations, deleteConversation } from "../services/api";
+import VaasLogo from "./VaasLogo";
 
 function ConversationSidebar({
   currentConversationId,
@@ -100,7 +101,9 @@ function ConversationSidebar({
       {/* Header */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">✦</div>
+          <div className="sidebar-logo-icon">
+            <VaasLogo size={18} />
+          </div>
           <span className="sidebar-logo-text">VAAS</span>
         </div>
 

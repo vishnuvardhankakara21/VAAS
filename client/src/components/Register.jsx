@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { registerUser, signInWithGoogle } from "../services/api";
+import VaasLogo from "./VaasLogo";
 
 function getPasswordStrength(password) {
   if (!password) return { score: 0, label: "", color: "" };
@@ -243,8 +244,11 @@ function Register({ onRegister, onSwitchToLogin }) {
     <div className="auth-card">
       {/* Logo */}
       <div className="auth-logo">
-        <div className="auth-logo-icon">✦</div>
+        <div className="auth-logo-icon">
+          <VaasLogo size={22} />
+        </div>
         <span className="auth-logo-text">VAAS</span>
+        <span className="auth-logo-tag">AI 2.0</span>
       </div>
 
       <h1 className="auth-title">Create account</h1>
