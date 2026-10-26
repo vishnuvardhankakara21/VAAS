@@ -204,57 +204,24 @@ function App() {
 
 
   // ──────────────────────────────────────────────────────────
-  // VOICE SPEECH RECOGNITION (BULLETPROOF LIVE TRANSCRIPT)
+  // VOICE SPEECH RECOGNITION (BULLETPROOF PERSISTENT INSTANCE)
   // ──────────────────────────────────────────────────────────
 
-  const handleToggleVoice = useCallback(async () => {
+  const inputRef = useRef(input);
+  useEffect(() => {
+    inputRef.current = input;
+  }, [input]);
+
+  const createRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Voice speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.");
-      return;
-    }
+    if (!SpeechRecognition) return null;
 
-    // Toggle OFF if already listening
-    if (isListeningRef.current) {
-      isListeningRef.current = false;
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (_) {}
-      }
-      setIsListening(false);
-      return;
-    }
-
-    // Step 1: Prompt for browser microphone permissions if not yet granted
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Immediately release the audio stream once permission is confirmed
-        stream.getTracks().forEach((track) => track.stop());
-      } catch (permErr) {
-        console.warn("Microphone permission check:", permErr);
-        if (permErr.name === "NotAllowedError" || permErr.name === "PermissionDeniedError") {
-          alert("Microphone permission was denied. Please click the camera/mic icon in your browser address bar to allow microphone access.");
-          return;
-        }
-      }
-    }
-
-    // Step 2: Initialize SpeechRecognition with continuous live streaming
     try {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
-
-      // Match system / browser locale for accurate transcription
-      const detectedLocale = navigator.language || navigator.userLanguage || "en-US";
-      recognition.lang = detectedLocale;
-
-      voiceBaseInputRef.current = input;
-      isListeningRef.current = true;
-      setIsListening(true);
+      recognition.lang = navigator.language || "en-US";
 
       recognition.onstart = () => {
         isListeningRef.current = true;
@@ -280,10 +247,8 @@ function App() {
         const base = voiceBaseInputRef.current ? voiceBaseInputRef.current.trim() : "";
         const combined = base ? `${base} ${spoken}` : spoken;
 
-        // Update React state
         setInput(combined);
 
-        // Directly update textarea DOM element to guarantee instant render
         if (textareaRef.current) {
           textareaRef.current.value = combined;
           textareaRef.current.style.height = "auto";
@@ -294,36 +259,77 @@ function App() {
 
       recognition.onerror = (event) => {
         console.warn("Speech recognition error:", event.error);
-        if (event.error === "no-speech") {
-          // Normal pause in speech — keep listening
-          return;
-        }
+        if (event.error === "no-speech") return; // Keep listening through pauses
         if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-          alert("Microphone permission was denied. Please allow microphone access in your browser settings to speak to VAAS.");
+          alert("Microphone permission was denied. Please allow microphone access in your browser to speak to VAAS.");
         }
         isListeningRef.current = false;
         setIsListening(false);
       };
 
       recognition.onend = () => {
-        // If still listening (e.g. Chrome silent pause timeout), restart recognition
         if (isListeningRef.current) {
+          // Attempt restart if Chrome stopped after silence
           try {
             recognition.start();
             return;
           } catch (_) {}
         }
         setIsListening(false);
+        isListeningRef.current = false;
       };
 
-      recognitionRef.current = recognition;
-      recognition.start();
+      return recognition;
     } catch (err) {
-      console.error("Speech recognition start failed:", err);
+      console.warn("Could not create SpeechRecognition:", err);
+      return null;
+    }
+  }, []);
+
+  const handleToggleVoice = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.");
+      return;
+    }
+
+    if (isListeningRef.current) {
       isListeningRef.current = false;
       setIsListening(false);
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (_) {}
+      }
+      return;
     }
-  }, [input]);
+
+    voiceBaseInputRef.current = inputRef.current;
+
+    // Direct synchronous invocation to maintain user gesture activation
+    try {
+      if (!recognitionRef.current) {
+        recognitionRef.current = createRecognition();
+      }
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+        isListeningRef.current = true;
+        setIsListening(true);
+      }
+    } catch (err) {
+      console.warn("Primary start failed, recreating instance:", err);
+      try {
+        recognitionRef.current = createRecognition();
+        recognitionRef.current?.start();
+        isListeningRef.current = true;
+        setIsListening(true);
+      } catch (retryErr) {
+        console.error("Speech recognition could not be started:", retryErr);
+        isListeningRef.current = false;
+        setIsListening(false);
+      }
+    }
+  }, [createRecognition]);
 
   useEffect(() => {
     return () => {
