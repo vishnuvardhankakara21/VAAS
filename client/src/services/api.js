@@ -100,6 +100,35 @@ export async function signInWithGoogle(credentialOrPayload) {
 
 
 // ============================================================
+// FORGOT & RESET PASSWORD
+// ============================================================
+
+export async function requestPasswordReset(email) {
+  const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Password reset request failed");
+  return data;
+}
+
+export async function resetPassword(email, resetToken, newPassword) {
+  const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, resetToken, newPassword }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Password reset failed");
+  return data;
+}
+
+
+// ============================================================
 // GET CURRENT USER (verify session)
 // ============================================================
 

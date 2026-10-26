@@ -312,3 +312,94 @@ export async function handleGoogleAuth({ credential }) {
     },
   };
 }
+
+
+// ============================================================
+// FORGOT PASSWORD / PASSWORD RESET
+// ============================================================
+
+export async function requestPasswordReset(email) {
+  if (!email || typeof email !== "string" || !email.trim()) {
+    throw new Error("Please enter your registered email address");
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const user = await User.findOne({ email: cleanEmail });
+
+  if (!user) {
+    throw new Error("No account found with this email address");
+  }
+
+  if (user.authProvider === "google" && !user.password) {
+    throw new Error("This account is signed in with Google. Please use 'Sign in with Google'.");
+  }
+
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
+  const resetToken = jwt.sign(
+    { userId: user._id.toString(), email: cleanEmail, purpose: "pwd_reset" },
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+
+  return {
+    success: true,
+    message: "Identity verified. You can now choose a new password.",
+    resetToken,
+    email: cleanEmail,
+  };
+}
+
+export async function resetPassword(email, resetToken, newPassword) {
+  if (!email || !resetToken || !newPassword) {
+    throw new Error("Email, reset token, and new password are required");
+  }
+
+  if (typeof newPassword !== "string" || newPassword.length < 6 || newPassword.length > 128) {
+    throw new Error("New password must be between 6 and 128 characters");
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+  } catch (err) {
+    throw new Error("Reset session has expired or is invalid. Please request a new one.");
+  }
+
+  if (!decoded || decoded.purpose !== "pwd_reset" || decoded.email !== cleanEmail) {
+    throw new Error("Invalid reset session");
+  }
+
+  const user = await User.findById(decoded.userId);
+  if (!user) {
+    throw new Error("User account not found");
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+  user.password = hashedPassword;
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  const token = createToken(user._id);
+
+  return {
+    success: true,
+    message: "Password reset successfully. You are now signed in.",
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar || null,
+      authProvider: user.authProvider,
+    },
+  };
+}

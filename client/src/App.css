@@ -3130,6 +3130,274 @@ input, textarea {
   to { opacity: 1; }
 }
 
+@keyframes pulseScale {
+  0%, 100% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes spinReverse {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes zoomFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes micPulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   16. CURSOR SPOTLIGHT / POINTER AMBIENT EFFECT
+──────────────────────────────────────────────────────────────── */
+
+:root {
+  --mouse-x: 50vw;
+  --mouse-y: 50vh;
+}
+
+.cursor-spotlight-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    520px circle at var(--mouse-x) var(--mouse-y),
+    rgba(14, 165, 233, 0.055) 0%,
+    transparent 70%
+  );
+  transition: background 0.12s ease;
+}
+
+:root[data-theme="light"] .cursor-spotlight-layer {
+  background: radial-gradient(
+    520px circle at var(--mouse-x) var(--mouse-y),
+    rgba(2, 132, 199, 0.04) 0%,
+    transparent 70%
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────
+   17. VOICE MIC BUTTON
+──────────────────────────────────────────────────────────────── */
+
+.mic-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: all var(--transition);
+  overflow: visible;
+}
+
+.mic-btn:hover:not(:disabled) {
+  background: var(--bg-surface-3);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.mic-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mic-btn-active {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  color: #f87171 !important;
+}
+
+.mic-btn-active:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22) !important;
+}
+
+.mic-pulse-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(239, 68, 68, 0.6);
+  animation: micPulse 1.2s ease-out infinite;
+  pointer-events: none;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   18. FORGOT PASSWORD / AUTH ADDITIONS
+──────────────────────────────────────────────────────────────── */
+
+.auth-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.auth-forgot-link {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--accent-light);
+  transition: color var(--transition), text-decoration var(--transition);
+}
+
+.auth-forgot-link:hover {
+  text-decoration: underline;
+  color: var(--accent);
+}
+
+.auth-success-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-sm);
+  color: #10b981;
+  font-size: 12.5px;
+  margin-bottom: 8px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   19. IMAGE STUDIO DROPDOWN — Z-INDEX FIX
+   (Ensures the floating menu appears above all sibling elements)
+──────────────────────────────────────────────────────────────── */
+
+.image-studio-controls {
+  position: relative;
+  z-index: 10;
+}
+
+.model-dropdown-section {
+  position: relative;
+  z-index: 20;
+}
+
+.model-dropdown-relative {
+  position: relative;
+  z-index: 20;
+}
+
+.model-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 340px;
+  overflow-y: auto;
+  animation: fadeIn 0.14s ease-out;
+}
+
+:root[data-theme="light"] .model-dropdown-menu {
+  background: #ffffff;
+  box-shadow:
+    0 20px 50px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(15, 23, 42, 0.07);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   20. HOVER MICRO-INTERACTIONS (Non-gradient handcrafted effects)
+──────────────────────────────────────────────────────────────── */
+
+/* Sidebar conversation items: underline slide-in */
+.conv-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.conv-item::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1px;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.conv-item:hover::after {
+  width: 100%;
+}
+
+/* Suggestion cards: subtle left border lift */
+.suggestion-card {
+  border-left: 2px solid transparent;
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.suggestion-card:hover {
+  border-left-color: var(--accent);
+  transform: translateX(2px);
+}
+
+/* Message action buttons: scale pop */
+.msg-action-btn {
+  transition: all var(--transition);
+}
+
+.msg-action-btn:hover {
+  transform: scale(1.08);
+}
+
+/* Sidebar tabs: glow flash on hover */
+.sidebar-nav-tab:hover:not(.active) {
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.12);
+}
+
+/* Input box focus: subtle inner glow instead of gradient ring */
+.input-box:focus-within {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--accent-ultra),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Auth card hover: ultra-subtle lift */
+.auth-card {
+  transition: box-shadow 0.3s ease;
+}
+
+.auth-card:focus-within {
+  box-shadow:
+    var(--shadow-panel),
+    0 0 50px rgba(14, 165, 233, 0.06);
+}
+
+/* Send button: firm press feel */
+.send-btn-active:active {
+  transform: scale(0.95) !important;
+}
+
+/* Image generate button: satisfying push */
+.image-generate-btn.ready:active {
+  transform: translateY(1px) !important;
+  box-shadow: none !important;
+}
+
 /* ────────────────────────────────────────────────────────────────
    15. RESPONSIVE MEDIA QUERIES
 ──────────────────────────────────────────────────────────────── */

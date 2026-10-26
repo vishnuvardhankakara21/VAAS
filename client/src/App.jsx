@@ -92,6 +92,10 @@ function App() {
     return saved !== null ? saved === "dark" : true;
   });
 
+  // Voice speech-to-text recording state
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
 
   // ──────────────────────────────────────────────────────────
   // REFS
@@ -99,6 +103,93 @@ function App() {
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+
+
+  // ──────────────────────────────────────────────────────────
+  // POINTER TRACKING FOR INTERACTIVE LIGHT EFFECT
+  // ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    function handlePointerMove(e) {
+      document.documentElement.style.setProperty("--mouse-x", `${e.clientX}px`);
+      document.documentElement.style.setProperty("--mouse-y", `${e.clientY}px`);
+    }
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    return () => window.removeEventListener("pointermove", handlePointerMove);
+  }, []);
+
+
+  // ──────────────────────────────────────────────────────────
+  // VOICE SPEECH RECOGNITION
+  // ──────────────────────────────────────────────────────────
+
+  const handleToggleVoice = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.");
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (_) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = navigator.language || "en-US";
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+
+        if (event.results[event.results.length - 1].isFinal) {
+          setInput((prev) => {
+            const separator = prev && !prev.endsWith(" ") ? " " : "";
+            return prev + separator + transcript.trim();
+          });
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.warn("Speech recognition error:", event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error("Speech recognition start failed:", err);
+      setIsListening(false);
+    }
+  }, [isListening]);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (_) {}
+      }
+    };
+  }, []);
 
 
   // ──────────────────────────────────────────────────────────
@@ -305,6 +396,13 @@ function App() {
     const trimmed = input.trim();
     if (!trimmed || loading || regenerating) return;
 
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (_) {}
+      setIsListening(false);
+    }
+
 
     // ── EDIT MODE ──────────────────────────────────────────
     if (editingMessageIndex !== null) {
@@ -478,6 +576,9 @@ function App() {
   if (!user) {
     return (
       <div className="auth-page">
+        {/* Interactive pointer ambient lighting layer */}
+        <div className="cursor-spotlight-layer" aria-hidden="true" />
+
         {/* Clean architectural background */}
         <div className="auth-bg">
           <div className="auth-grid-pattern" />
@@ -509,6 +610,8 @@ function App() {
 
   return (
     <div className={`app ${sidebarOpen ? "sidebar-expanded" : "sidebar-collapsed"}`}>
+      {/* Interactive pointer ambient lighting layer */}
+      <div className="cursor-spotlight-layer" aria-hidden="true" />
 
       {/* Mobile Overlay */}
       {mobileSidebarOpen && (
@@ -841,6 +944,33 @@ function App() {
               />
 
               <div className="input-actions-bar">
+                {/* Voice / Mic Button */}
+                <button
+                  type="button"
+                  className={`mic-btn ${isListening ? "mic-btn-active" : ""}`}
+                  id="voice-input-btn"
+                  onClick={handleToggleVoice}
+                  disabled={loading || regenerating}
+                  aria-label={isListening ? "Stop recording" : "Start voice input"}
+                  title={isListening ? "Click to stop recording" : "Speak to type (Voice input)"}
+                >
+                  {isListening ? (
+                    <>
+                      <span className="mic-pulse-ring" />
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                      </svg>
+                    </>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" y1="19" x2="12" y2="23"/>
+                      <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                  )}
+                </button>
+
                 {input.trim() && !loading && (
                   <button
                     type="button"

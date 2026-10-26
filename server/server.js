@@ -23,6 +23,8 @@ import {
   registerUser,
   loginUser,
   handleGoogleAuth,
+  requestPasswordReset,
+  resetPassword,
 } from "./services/auth.js";
 
 import Conversation from "./models/Conversation.js";
@@ -426,6 +428,66 @@ app.post(
         });
       }
 
+      next(error);
+    }
+  }
+);
+
+
+// ========================================
+// FORGOT PASSWORD
+// ========================================
+
+app.post(
+  "/api/auth/forgot-password",
+  authLimiter,
+  async (req, res, next) => {
+    try {
+      const { email } = req.body || {};
+      if (!email || typeof email !== "string" || !email.trim()) {
+        return res.status(400).json({ error: "Email address is required" });
+      }
+
+      const result = await requestPasswordReset(email.trim());
+      return res.json(result);
+    } catch (error) {
+      if (
+        error.message.includes("No account found") ||
+        error.message.includes("Google") ||
+        error.message.includes("email")
+      ) {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  }
+);
+
+
+// ========================================
+// RESET PASSWORD
+// ========================================
+
+app.post(
+  "/api/auth/reset-password",
+  authLimiter,
+  async (req, res, next) => {
+    try {
+      const { email, resetToken, newPassword } = req.body || {};
+      if (!email || !resetToken || !newPassword) {
+        return res.status(400).json({ error: "Email, reset token, and new password are required" });
+      }
+
+      const result = await resetPassword(email, resetToken, newPassword);
+      return res.json(result);
+    } catch (error) {
+      if (
+        error.message.includes("expired") ||
+        error.message.includes("Invalid") ||
+        error.message.includes("characters")
+      ) {
+        return res.status(400).json({ error: error.message });
+      }
       next(error);
     }
   }

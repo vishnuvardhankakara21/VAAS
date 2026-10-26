@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { loginUser, signInWithGoogle } from "../services/api";
+import { loginUser, signInWithGoogle, requestPasswordReset, resetPassword } from "../services/api";
 import VaasLogo from "./VaasLogo";
 
 function Login({ onLogin, onSwitchToRegister }) {
@@ -10,13 +10,22 @@ function Login({ onLogin, onSwitchToRegister }) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Forgot password state
+  const [isForgotMode, setIsForgotMode] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1: email, 2: new password
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState("");
+
   const googleBtnRef = useRef(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const hasGoogleClientId = Boolean(googleClientId && googleClientId.trim());
 
   // Initialize official Google Identity Services button if Client ID is configured
   useEffect(() => {
-    if (!hasGoogleClientId) return;
+    if (!hasGoogleClientId || isForgotMode) return;
 
     let intervalId = null;
 
@@ -82,21 +91,7 @@ function Login({ onLogin, onSwitchToRegister }) {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [hasGoogleClientId, googleClientId, onLogin]);
-
-  async function handleGoogleSignInFallback() {
-    setError("");
-
-    if (window.google?.accounts?.id) {
-      try {
-        window.google.accounts.id.prompt();
-      } catch (err) {
-        console.warn("Google prompt error:", err);
-      }
-    } else {
-      setError("Google Sign-In is unavailable right now. Please try again in a moment or use email/password.");
-    }
-  }
+  }, [hasGoogleClientId, googleClientId, onLogin, isForgotMode]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -134,6 +129,255 @@ function Login({ onLogin, onSwitchToRegister }) {
     }
   }
 
+  // Handle requesting password reset (Step 1)
+  async function handleRequestReset(e) {
+    e.preventDefault();
+    setError("");
+
+    if (!email.trim()) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await requestPasswordReset(email.trim());
+      setResetToken(data.resetToken);
+      setForgotStep(2);
+      setError("");
+    } catch (err) {
+      setError(err.message || "Could not verify email. Please check and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Handle setting new password (Step 2)
+  async function handleCompleteReset(e) {
+    e.preventDefault();
+    setError("");
+
+    if (!newPassword) {
+      setError("Please enter your new password");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await resetPassword(email.trim(), resetToken, newPassword);
+      if (data.token && data.user) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("tokenExpiry", String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+        localStorage.setItem("user", JSON.stringify(data.user));
+        onLogin(data.user);
+        return;
+      }
+      setResetSuccessMsg("Password reset successfully! Please sign in with your new password.");
+      setIsForgotMode(false);
+      setPassword("");
+    } catch (err) {
+      setError(err.message || "Password reset failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleBackToLogin() {
+    setIsForgotMode(false);
+    setForgotStep(1);
+    setError("");
+    setResetToken("");
+    setNewPassword("");
+    setConfirmPassword("");
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // VIEW: FORGOT PASSWORD
+  // ──────────────────────────────────────────────────────────
+  if (isForgotMode) {
+    return (
+      <div className="auth-card" id="forgot-password-card">
+        <div className="auth-logo">
+          <div className="auth-logo-icon">
+            <VaasLogo size={22} />
+          </div>
+          <span className="auth-logo-text">VAAS</span>
+        </div>
+
+        <h1 className="auth-title">Reset password</h1>
+        <p className="auth-subtitle">
+          {forgotStep === 1
+            ? "Enter your account email to verify and choose a new password"
+            : `Set a new password for ${email.trim()}`}
+        </p>
+
+        {error && (
+          <div className="auth-error" role="alert">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {error}
+          </div>
+        )}
+
+        {forgotStep === 1 ? (
+          <form className="auth-form" onSubmit={handleRequestReset} noValidate>
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="reset-email">Email Address</label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </span>
+                <input
+                  id="reset-email"
+                  type="email"
+                  className="auth-input"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(""); }}
+                  disabled={loading}
+                  autoComplete="email"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="auth-submit-button"
+              id="request-reset-btn"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="auth-spinner" />
+                  Verifying account...
+                </>
+              ) : (
+                "Continue"
+              )}
+            </button>
+          </form>
+        ) : (
+          <form className="auth-form" onSubmit={handleCompleteReset} noValidate>
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="reset-new-password">New Password</label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
+                <input
+                  id="reset-new-password"
+                  type={showNewPassword ? "text" : "password"}
+                  className="auth-input"
+                  placeholder="At least 6 characters"
+                  value={newPassword}
+                  onChange={(e) => { setNewPassword(e.target.value); setError(""); }}
+                  disabled={loading}
+                  autoComplete="new-password"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="auth-eye-button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                >
+                  {showNewPassword ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="reset-confirm-password">Confirm New Password</label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
+                <input
+                  id="reset-confirm-password"
+                  type={showNewPassword ? "text" : "password"}
+                  className="auth-input"
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); setError(""); }}
+                  disabled={loading}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="auth-submit-button"
+              id="confirm-reset-btn"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="auth-spinner" />
+                  Updating password...
+                </>
+              ) : (
+                "Update Password & Sign In"
+              )}
+            </button>
+          </form>
+        )}
+
+        <div className="auth-switch">
+          <button
+            type="button"
+            className="auth-switch-button"
+            onClick={handleBackToLogin}
+          >
+            ← Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // VIEW: STANDARD LOGIN
+  // ──────────────────────────────────────────────────────────
   return (
     <div className="auth-card">
       {/* Logo */}
@@ -145,7 +389,16 @@ function Login({ onLogin, onSwitchToRegister }) {
       </div>
 
       <h1 className="auth-title">Welcome back</h1>
-      <p className="auth-subtitle">Sign in to your VAAS account</p>
+      <p className="auth-subtitle">Sign in to your account</p>
+
+      {resetSuccessMsg && (
+        <div className="auth-success-alert" role="status">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>{resetSuccessMsg}</span>
+        </div>
+      )}
 
       {/* Google Sign In Button — only shown when Client ID is configured */}
       {hasGoogleClientId && (
@@ -195,7 +448,21 @@ function Login({ onLogin, onSwitchToRegister }) {
 
         {/* Password */}
         <div className="auth-field">
-          <label className="auth-label" htmlFor="login-password">Password</label>
+          <div className="auth-label-row">
+            <label className="auth-label" htmlFor="login-password">Password</label>
+            <button
+              type="button"
+              className="auth-forgot-link"
+              onClick={() => {
+                setIsForgotMode(true);
+                setForgotStep(1);
+                setError("");
+                setResetSuccessMsg("");
+              }}
+            >
+              Forgot password?
+            </button>
+          </div>
           <div className="auth-input-wrapper">
             <span className="auth-input-icon">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

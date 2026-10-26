@@ -330,7 +330,7 @@ export default function ImageGenerator({ onBackToChat }) {
                               <span className="item-name">{model.name}</span>
                               <span className="item-badge">{model.badge}</span>
                             </div>
-                            <p className="item-desc">{model.desc}</p>
+                            <span className="item-desc">{model.desc}</span>
                           </div>
                           {isSelected && (
                             <svg className="item-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
