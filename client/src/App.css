@@ -3334,13 +3334,8 @@ input, textarea {
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes micPulse {
-  0% { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(2.4); opacity: 0; }
-}
 
 /* ────────────────────────────────────────────────────────────────
    16. CURSOR SPOTLIGHT / POINTER AMBIENT EFFECT
@@ -3370,114 +3365,6 @@ input, textarea {
     rgba(2, 132, 199, 0.04) 0%,
     transparent 70%
   );
-}
-
-/* ────────────────────────────────────────────────────────────────
-   17. VOICE MIC BUTTON
-──────────────────────────────────────────────────────────────── */
-
-.mic-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  flex-shrink: 0;
-  transition: all var(--transition);
-  overflow: visible;
-}
-
-.mic-btn:hover:not(:disabled) {
-  background: var(--bg-surface-3);
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-}
-
-.mic-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.mic-btn-active {
-  background: rgba(239, 68, 68, 0.15) !important;
-  border-color: rgba(239, 68, 68, 0.45) !important;
-  color: #f87171 !important;
-}
-
-.mic-btn-active:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.22) !important;
-}
-
-.mic-pulse-ring {
-  position: absolute;
-  inset: -2px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid rgba(239, 68, 68, 0.6);
-  animation: micPulse 1.2s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes micPulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.9;
-  }
-  50% {
-    transform: scale(1.12);
-    opacity: 0.4;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0.9;
-  }
-}
-
-/* Voice Listening Live Banner */
-.voice-listening-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  border-radius: var(--radius-md);
-  color: #f87171;
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 8px;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.voice-pulse-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  box-shadow: 0 0 10px #ef4444;
-  animation: micPulse 1s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-.voice-done-btn {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 9px;
-  background: rgba(239, 68, 68, 0.25);
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  border-radius: var(--radius-full);
-  color: #ffffff;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.voice-done-btn:hover {
-  background: rgba(239, 68, 68, 0.45);
 }
 
 /* ────────────────────────────────────────────────────────────────

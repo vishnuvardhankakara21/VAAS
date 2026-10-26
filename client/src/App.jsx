@@ -109,11 +109,6 @@ function App() {
     return saved !== null ? saved === "dark" : true;
   });
 
-  // Voice speech-to-text recording state
-  const [isListening, setIsListening] = useState(false);
-  const isListeningRef = useRef(false);
-  const recognitionRef = useRef(null);
-  const voiceBaseInputRef = useRef("");
 
 
   // ──────────────────────────────────────────────────────────
@@ -202,144 +197,6 @@ function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [chatModelDropdownOpen]);
 
-
-  // ──────────────────────────────────────────────────────────
-  // VOICE SPEECH RECOGNITION (REAL-TIME LIVE TYPING)
-  // ──────────────────────────────────────────────────────────
-
-  const inputRef = useRef(input);
-  useEffect(() => {
-    inputRef.current = input;
-  }, [input]);
-
-  const startVoiceRecording = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Voice speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.");
-      return;
-    }
-
-    try {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (_) {}
-      }
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-      recognition.lang = navigator.language || "en-US";
-
-      const startInput = inputRef.current || "";
-      let previousFinals = "";
-
-      recognition.onstart = () => {
-        isListeningRef.current = true;
-        setIsListening(true);
-      };
-
-      // LIVE REAL-TIME TYPING AS THE USER SPEAKS
-      recognition.onresult = (event) => {
-        let currentInterim = "";
-        let currentFinal = "";
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const item = event.results[i];
-          if (item && item[0]) {
-            if (item.isFinal) {
-              currentFinal += item[0].transcript + " ";
-            } else {
-              currentInterim += item[0].transcript;
-            }
-          }
-        }
-
-        if (currentFinal) {
-          previousFinals += currentFinal;
-        }
-
-        const totalSpoken = (previousFinals + currentInterim).trim();
-        const separator = startInput && !startInput.endsWith(" ") ? " " : "";
-        const combined = startInput ? `${startInput}${separator}${totalSpoken}` : totalSpoken;
-
-        // 1. Update React state
-        setInput(combined);
-
-        // 2. Directly update DOM textarea for instantaneous, zero-latency visual typing
-        if (textareaRef.current) {
-          textareaRef.current.value = combined;
-          textareaRef.current.style.height = "auto";
-          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-          textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.warn("Speech recognition error:", event.error);
-        if (event.error === "no-speech") {
-          // Normal pause in speech — keep listening
-          return;
-        }
-        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-          alert("Microphone permission was denied. Please allow microphone access in your browser settings to speak to VAAS.");
-        }
-        isListeningRef.current = false;
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        // If user didn't explicitly click stop, seamlessly restart to keep continuous typing active
-        if (isListeningRef.current) {
-          try {
-            startVoiceRecording();
-            return;
-          } catch (_) {
-            isListeningRef.current = false;
-            setIsListening(false);
-          }
-        } else {
-          isListeningRef.current = false;
-          setIsListening(false);
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-      isListeningRef.current = true;
-      setIsListening(true);
-    } catch (err) {
-      console.error("Speech recognition start failed:", err);
-      alert("Could not start speech recognition: " + (err.message || "Please check microphone permissions."));
-      isListeningRef.current = false;
-      setIsListening(false);
-    }
-  }, []);
-
-  const handleToggleVoice = useCallback(() => {
-    if (isListeningRef.current) {
-      isListeningRef.current = false;
-      setIsListening(false);
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (_) {}
-      }
-      return;
-    }
-
-    startVoiceRecording();
-  }, [startVoiceRecording]);
-
-  useEffect(() => {
-    return () => {
-      isListeningRef.current = false;
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch (_) {}
-      }
-    };
-  }, []);
 
 
   // ──────────────────────────────────────────────────────────
@@ -546,15 +403,6 @@ function App() {
     const trimmed = input.trim();
     if (!trimmed || loading || regenerating) return;
 
-    if (isListeningRef.current) {
-      isListeningRef.current = false;
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (_) {}
-      }
-      setIsListening(false);
-    }
 
 
     // ── EDIT MODE ──────────────────────────────────────────
@@ -1091,21 +939,6 @@ function App() {
             </div>
           )}
 
-          {/* Voice Listening Live Banner */}
-          {isListening && (
-            <div className="voice-listening-indicator" role="status" aria-live="polite">
-              <span className="voice-pulse-dot" />
-              <span>Listening... Speak into your microphone</span>
-              <button
-                type="button"
-                className="voice-done-btn"
-                onClick={handleToggleVoice}
-                title="Finish speaking"
-              >
-                Done ✓
-              </button>
-            </div>
-          )}
 
           <form className="input-form" onSubmit={handleSendMessage}>
             <div className="input-box">
@@ -1123,32 +956,6 @@ function App() {
               />
 
               <div className="input-actions-bar">
-                {/* Voice / Mic Button */}
-                <button
-                  type="button"
-                  className={`mic-btn ${isListening ? "mic-btn-active" : ""}`}
-                  id="voice-input-btn"
-                  onClick={handleToggleVoice}
-                  disabled={loading || regenerating}
-                  aria-label={isListening ? "Stop recording" : "Start voice input"}
-                  title={isListening ? "Click to stop recording" : "Speak to type (Voice input)"}
-                >
-                  {isListening ? (
-                    <>
-                      <span className="mic-pulse-ring" />
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="4" y="4" width="16" height="16" rx="2"/>
-                      </svg>
-                    </>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                      <line x1="12" y1="19" x2="12" y2="23"/>
-                      <line x1="8" y1="23" x2="16" y2="23"/>
-                    </svg>
-                  )}
-                </button>
 
                 {input.trim() && !loading && (
                   <button
