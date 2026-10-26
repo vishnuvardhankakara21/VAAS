@@ -440,39 +440,33 @@ function App() {
   const suggestions = [
     {
       icon: "💻",
-      category: "Code & Architecture",
-      title: "Full-Stack REST API",
-      text: "Design a production-ready Node.js REST API with rate limiting and JWT auth",
+      title: "Write code",
+      text: "Build a modern responsive component with clean styling and logic",
     },
     {
       icon: "⚡",
-      category: "Performance",
-      title: "Debug & Optimize",
-      text: "Analyze this JavaScript performance bottleneck and suggest optimizations",
+      title: "Debug an issue",
+      text: "Troubleshoot a tricky bug, race condition, or performance bottleneck",
     },
     {
       icon: "🧠",
-      category: "Deep Concepts",
-      title: "Quantum Computing",
-      text: "Explain quantum superposition and entanglement using intuitive physical analogies",
+      title: "Explain a concept",
+      text: "Break down distributed systems, consensus, or algorithms simply",
     },
     {
       icon: "📊",
-      category: "Data & Systems",
-      title: "System Design",
-      text: "Architect a real-time collaborative document editing engine like Google Docs",
+      title: "System architecture",
+      text: "Design a high-throughput queue-based background processing service",
     },
     {
       icon: "✍️",
-      category: "Technical Writing",
-      title: "Executive Summary",
-      text: "Draft an executive summary and architectural decision record for a cloud migration",
+      title: "Draft content",
+      text: "Write technical documentation, clean release notes, or an email update",
     },
     {
       icon: "🎯",
-      category: "Strategy & Planning",
-      title: "30-Day Sprint Plan",
-      text: "Create a structured 30-day technical sprint roadmap with weekly milestones",
+      title: "Brainstorm ideas",
+      text: "Explore novel features, edge cases, and engineering trade-offs",
     },
   ];
 
@@ -492,10 +486,6 @@ function App() {
         </div>
 
         <div className="auth-container">
-          <div className="auth-top-badge">
-            <span className="auth-badge-dot" />
-            <span>Next-Generation AI Workspace</span>
-          </div>
           {authView === "login" ? (
             <Login
               onLogin={handleLogin}
@@ -593,10 +583,9 @@ function App() {
               <div>
                 <div className="chat-header-title-row">
                   <h1 className="chat-header-title">VAAS</h1>
-                  <span className="chat-header-badge">AI 2.0</span>
                 </div>
                 <p className="chat-header-subtitle">
-                  {activeView === "image" ? "FLUX & Gemini Studio" : "Intelligence Workspace"}
+                  {activeView === "image" ? "Image Studio" : "AI Assistant"}
                 </p>
               </div>
             </div>
@@ -627,7 +616,6 @@ function App() {
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
                 <span>Image Studio</span>
-                <span className="header-nav-sparkle" />
               </button>
             </div>
           </div>
@@ -635,7 +623,7 @@ function App() {
           <div className="chat-header-right">
             <div className="header-status">
               <span className="status-dot" />
-              <span className="status-text">Connected</span>
+              <span className="status-text">Online</span>
             </div>
 
             <div className="header-avatar" title={user.name}>
@@ -667,23 +655,17 @@ function App() {
 
           {messages.length === 0 ? (
             <div className="welcome-screen">
-              <div className="welcome-hero-badge">
-                <span className="welcome-hero-dot" />
-                <span>VAAS Intelligence Engine • Gemini Powered</span>
-              </div>
-
               <div className="welcome-icon-wrapper">
                 <div className="welcome-icon">
-                  <VaasLogo size={36} />
+                  <VaasLogo size={32} />
                 </div>
               </div>
 
               <h2 className="welcome-title">
-                Hello, <span className="welcome-name">{user.name.split(" ")[0]}</span> 👋
+                Hello, <span className="welcome-name">{user.name.split(" ")[0]}</span>
               </h2>
               <p className="welcome-subtitle">
-                Engineered for deep reasoning, full-stack programming, and creative generation.<br />
-                Select a curated prompt or type below to begin.
+                How can I help you today?
               </p>
 
               <div className="suggestion-grid">
@@ -696,7 +678,7 @@ function App() {
                   >
                     <div className="suggestion-card-header">
                       <span className="suggestion-card-icon">{s.icon}</span>
-                      <span className="suggestion-card-category">{s.category}</span>
+                      <span className="suggestion-card-title">{s.title}</span>
                       <span className="suggestion-card-arrow">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <line x1="5" y1="12" x2="19" y2="12" />
@@ -704,7 +686,6 @@ function App() {
                         </svg>
                       </span>
                     </div>
-                    <div className="suggestion-card-title">{s.title}</div>
                     <div className="suggestion-card-text">{s.text}</div>
                   </button>
                 ))}
@@ -730,11 +711,8 @@ function App() {
                     <div className={`msg-bubble ${isUser ? "user-bubble" : "ai-bubble"}`}>
                       <div className="msg-header-bar">
                         <div className="msg-author">
-                          {isUser ? user.name : "VAAS Assistant"}
+                          {isUser ? user.name : "VAAS"}
                         </div>
-                        {!isUser && (
-                          <span className="msg-model-tag">Gemini 2.5 Flash</span>
-                        )}
                       </div>
 
                       <div className="msg-content">
@@ -815,8 +793,7 @@ function App() {
               </div>
               <div className="msg-bubble ai-bubble">
                 <div className="msg-header-bar">
-                  <div className="msg-author">VAAS Assistant</div>
-                  <span className="msg-model-tag">Thinking...</span>
+                  <div className="msg-author">VAAS</div>
                 </div>
                 <div className="typing-indicator">
                   <span /><span /><span />
@@ -850,11 +827,20 @@ function App() {
 
           <form className="input-form" onSubmit={handleSendMessage}>
             <div className="input-box">
-              <div className="input-box-header">
-                <div className="input-model-pill">
-                  <span className="input-model-dot" />
-                  <span>Gemini 2.5 Flash</span>
-                </div>
+              <textarea
+                ref={textareaRef}
+                className="chat-textarea"
+                id="chat-input"
+                placeholder={editingMessageIndex !== null ? "Edit your message..." : "Ask anything or describe what you want to build..."}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading || regenerating}
+                rows={1}
+                aria-label="Message input"
+              />
+
+              <div className="input-actions-bar">
                 {input.trim() && !loading && (
                   <button
                     type="button"
@@ -865,21 +851,6 @@ function App() {
                     Clear
                   </button>
                 )}
-              </div>
-
-              <div className="input-box-main">
-                <textarea
-                  ref={textareaRef}
-                  className="chat-textarea"
-                  id="chat-input"
-                  placeholder={editingMessageIndex !== null ? "Edit your message..." : "Ask VAAS anything or describe code to generate..."}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={loading || regenerating}
-                  rows={1}
-                  aria-label="Message input"
-                />
 
                 <button
                   type="submit"

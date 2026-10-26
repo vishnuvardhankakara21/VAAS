@@ -248,7 +248,6 @@ function Register({ onRegister, onSwitchToLogin }) {
           <VaasLogo size={22} />
         </div>
         <span className="auth-logo-text">VAAS</span>
-        <span className="auth-logo-tag">AI 2.0</span>
       </div>
 
       <h1 className="auth-title">Create account</h1>
