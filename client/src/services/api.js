@@ -157,10 +157,10 @@ export async function refreshToken() {
 // SEND CHAT MESSAGE
 // ============================================================
 
-export async function sendChatMessage(message, previousInteractionId, conversationId) {
+export async function sendChatMessage(message, previousInteractionId, conversationId, model) {
   return authFetch(`${API_URL}/api/chat`, {
     method: "POST",
-    body: JSON.stringify({ message, previousInteractionId, conversationId }),
+    body: JSON.stringify({ message, previousInteractionId, conversationId, model }),
   });
 }
 

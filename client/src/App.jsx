@@ -54,6 +54,23 @@ function App() {
   const [authView, setAuthView] = useState("login"); // "login" | "register"
   const [activeView, setActiveView] = useState("chat"); // "chat" | "image"
 
+  // ──────────────────────────────────────────────────────────
+  // CHAT MODEL SELECTOR
+  // ──────────────────────────────────────────────────────────
+
+  const CHAT_MODELS = [
+    { id: "gemini-2.0-flash",         label: "Gemini 2.0 Flash",         desc: "Fast and capable multimodal" },
+    { id: "gemini-2.5-flash-preview-05-20", label: "Gemini 2.5 Flash",  desc: "Latest preview, reasoning" },
+    { id: "gemini-1.5-flash",         label: "Gemini 1.5 Flash",         desc: "Balanced speed & quality" },
+    { id: "gemini-1.5-pro",           label: "Gemini 1.5 Pro",           desc: "Most capable, complex tasks" },
+  ];
+
+  const [selectedChatModel, setSelectedChatModel] = useState(() =>
+    localStorage.getItem("chatModel") || "gemini-2.0-flash"
+  );
+  const [chatModelDropdownOpen, setChatModelDropdownOpen] = useState(false);
+  const chatModelDropdownRef = useRef(null);
+
 
   // ──────────────────────────────────────────────────────────
   // CHAT STATE
@@ -95,6 +112,7 @@ function App() {
   // Voice speech-to-text recording state
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
+  const voiceBaseInputRef = useRef("");
 
 
   // ──────────────────────────────────────────────────────────
@@ -103,30 +121,95 @@ function App() {
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const cursorDotRef = useRef(null);
+  const cursorRingRef = useRef(null);
 
 
   // ──────────────────────────────────────────────────────────
-  // POINTER TRACKING FOR INTERACTIVE LIGHT EFFECT
+  // POINTER TRACKING & CUSTOM CURSOR PHYSICS (LUXURY AMBER)
   // ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let ringX = mouseX;
+    let ringY = mouseY;
+    let animId;
+
     function handlePointerMove(e) {
-      document.documentElement.style.setProperty("--mouse-x", `${e.clientX}px`);
-      document.documentElement.style.setProperty("--mouse-y", `${e.clientY}px`);
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      document.documentElement.style.setProperty("--mouse-x", `${mouseX}px`);
+      document.documentElement.style.setProperty("--mouse-y", `${mouseY}px`);
+
+      if (cursorDotRef.current) {
+        cursorDotRef.current.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0) translate(-50%, -50%)`;
+      }
     }
+
+    // Smooth physics trailing ring loop
+    function updateCursorRing() {
+      ringX += (mouseX - ringX) * 0.22;
+      ringY += (mouseY - ringY) * 0.22;
+      if (cursorRingRef.current) {
+        cursorRingRef.current.style.transform = `translate3d(${ringX}px, ${ringY}px, 0) translate(-50%, -50%)`;
+      }
+      animId = requestAnimationFrame(updateCursorRing);
+    }
+    animId = requestAnimationFrame(updateCursorRing);
+
+    // Hover detection for interactive elements (triggers cursor bloom)
+    function handleMouseOver(e) {
+      const target = e.target;
+      if (
+        target &&
+        (target.closest("button") ||
+         target.closest("a") ||
+         target.closest("input") ||
+         target.closest("textarea") ||
+         target.closest("[role='button']") ||
+         target.closest(".chat-model-trigger") ||
+         target.closest(".model-dropdown-trigger"))
+      ) {
+        document.body.classList.add("cursor-hover");
+      } else {
+        document.body.classList.remove("cursor-hover");
+      }
+    }
+
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
-    return () => window.removeEventListener("pointermove", handlePointerMove);
+    window.addEventListener("mouseover", handleMouseOver, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("mouseover", handleMouseOver);
+      document.body.classList.remove("cursor-hover");
+    };
   }, []);
+
+  // Close chat model dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (chatModelDropdownRef.current && !chatModelDropdownRef.current.contains(e.target)) {
+        setChatModelDropdownOpen(false);
+      }
+    }
+    if (chatModelDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [chatModelDropdownOpen]);
 
 
   // ──────────────────────────────────────────────────────────
-  // VOICE SPEECH RECOGNITION
+  // VOICE SPEECH RECOGNITION (BULLETPROOF LIVE TRANSCRIPT)
   // ──────────────────────────────────────────────────────────
 
   const handleToggleVoice = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Voice speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.");
+      alert("Voice speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.");
       return;
     }
 
@@ -144,28 +227,46 @@ function App() {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = navigator.language || "en-US";
+      recognition.lang = "en-US";
+      recognition.maxAlternatives = 1;
+
+      voiceBaseInputRef.current = input;
 
       recognition.onstart = () => {
         setIsListening(true);
       };
 
       recognition.onresult = (event) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        for (let i = 0; i < event.results.length; i++) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            finalTranscript += item[0].transcript + " ";
+          } else {
+            interimTranscript += item[0].transcript;
+          }
         }
 
-        if (event.results[event.results.length - 1].isFinal) {
-          setInput((prev) => {
-            const separator = prev && !prev.endsWith(" ") ? " " : "";
-            return prev + separator + transcript.trim();
-          });
+        const spoken = (finalTranscript + interimTranscript).trim();
+        const base = voiceBaseInputRef.current ? voiceBaseInputRef.current.trim() : "";
+        const combined = base ? `${base} ${spoken}` : spoken;
+
+        setInput(combined);
+
+        // Auto-expand textarea to fit new spoken text
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
         }
       };
 
       recognition.onerror = (event) => {
         console.warn("Speech recognition error:", event.error);
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          alert("Microphone permission was denied. Please allow microphone access in your browser settings to speak to VAAS.");
+        }
         setIsListening(false);
       };
 
@@ -179,7 +280,7 @@ function App() {
       console.error("Speech recognition start failed:", err);
       setIsListening(false);
     }
-  }, [isListening]);
+  }, [isListening, input]);
 
   useEffect(() => {
     return () => {
@@ -421,7 +522,7 @@ function App() {
       setLoading(true);
 
       try {
-        const data = await sendChatMessage(trimmed, null, currentConversationId);
+        const data = await sendChatMessage(trimmed, null, currentConversationId, selectedChatModel);
         setMessages((prev) => [...prev, {
           role: "assistant",
           content: data.response || "VAAS could not generate a response.",
@@ -447,7 +548,7 @@ function App() {
     setLoading(true);
 
     try {
-      const data = await sendChatMessage(trimmed, previousInteractionId, currentConversationId);
+      const data = await sendChatMessage(trimmed, previousInteractionId, currentConversationId, selectedChatModel);
       setMessages((prev) => [...prev, {
         role: "assistant",
         content: data.response || "VAAS could not generate a response.",
@@ -463,7 +564,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, regenerating, editingMessageIndex, messages, previousInteractionId, currentConversationId]);
+  }, [input, loading, regenerating, editingMessageIndex, messages, previousInteractionId, currentConversationId, selectedChatModel]);
 
 
   // ──────────────────────────────────────────────────────────
@@ -491,7 +592,7 @@ function App() {
     setRegenerating(true);
 
     try {
-      const data = await sendChatMessage(lastUserMessage.content, previousInteractionId, currentConversationId);
+      const data = await sendChatMessage(lastUserMessage.content, previousInteractionId, currentConversationId, selectedChatModel);
       setMessages((prev) => [...prev, {
         role: "assistant",
         content: data.response || "VAAS could not generate a response.",
@@ -576,6 +677,10 @@ function App() {
   if (!user) {
     return (
       <div className="auth-page">
+        {/* Custom Luxury Amber Cursor */}
+        <div ref={cursorRingRef} className="custom-cursor-ring" aria-hidden="true" />
+        <div ref={cursorDotRef} className="custom-cursor-dot" aria-hidden="true" />
+
         {/* Interactive pointer ambient lighting layer */}
         <div className="cursor-spotlight-layer" aria-hidden="true" />
 
@@ -610,6 +715,10 @@ function App() {
 
   return (
     <div className={`app ${sidebarOpen ? "sidebar-expanded" : "sidebar-collapsed"}`}>
+      {/* Custom Luxury Amber Cursor */}
+      <div ref={cursorRingRef} className="custom-cursor-ring" aria-hidden="true" />
+      <div ref={cursorDotRef} className="custom-cursor-dot" aria-hidden="true" />
+
       {/* Interactive pointer ambient lighting layer */}
       <div className="cursor-spotlight-layer" aria-hidden="true" />
 
@@ -716,7 +825,9 @@ function App() {
                 title="Switch to Image Studio"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
                 </svg>
                 <span>Image Studio</span>
               </button>
@@ -1007,8 +1118,52 @@ function App() {
             </div>
 
             <div className="input-footer-row">
+              {/* Chat Model Selector */}
+              <div className="chat-model-selector" ref={chatModelDropdownRef}>
+                <button
+                  type="button"
+                  className={`chat-model-trigger ${chatModelDropdownOpen ? "open" : ""}`}
+                  id="chat-model-trigger-btn"
+                  onClick={() => setChatModelDropdownOpen((p) => !p)}
+                  title="Select AI model"
+                  aria-haspopup="listbox"
+                  aria-expanded={chatModelDropdownOpen}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                  </svg>
+                  <span>{CHAT_MODELS.find((m) => m.id === selectedChatModel)?.label ?? "Gemini 2.0 Flash"}</span>
+                  <svg className={`chat-model-chevron ${chatModelDropdownOpen ? "open" : ""}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+
+                {chatModelDropdownOpen && (
+                  <div className="chat-model-menu" role="listbox">
+                    {CHAT_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedChatModel === m.id}
+                        className={`chat-model-item ${selectedChatModel === m.id ? "selected" : ""}`}
+                        onClick={() => {
+                          setSelectedChatModel(m.id);
+                          localStorage.setItem("chatModel", m.id);
+                          setChatModelDropdownOpen(false);
+                        }}
+                      >
+                        <div className="chat-model-item-name">{m.label}</div>
+                        <div className="chat-model-item-desc">{m.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <span className="input-hint">
-                <kbd>Enter ↵</kbd> send &nbsp;·&nbsp; <kbd>Shift + Enter</kbd> new line
+                <kbd>Enter ↵</kbd> send &nbsp;·&nbsp; <kbd>Shift+Enter</kbd> newline
               </span>
             </div>
           </form>

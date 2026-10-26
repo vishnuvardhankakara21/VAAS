@@ -726,6 +726,7 @@ app.post(
         message,
         previousInteractionId,
         conversationId,
+        model,
       } = req.body;
 
 
@@ -905,7 +906,8 @@ app.post(
         result = await generateAIResponse(
           cleanMessage,
           chatHistory,
-          currentUser
+          currentUser,
+          model
         );
 
         // Asynchronously extract and persist personal facts for cross-chat memory (non-blocking)

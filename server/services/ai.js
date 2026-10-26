@@ -56,7 +56,7 @@ CROSS-CHAT MEMORY & CONTINUITY INSTRUCTIONS:
 - Never state that you don't know their name or that you forgot them just because they started a new conversation.`;
 }
 
-export async function generateAIResponse(message, historyOrInteractionId, user) {
+export async function generateAIResponse(message, historyOrInteractionId, user, requestedModel = null) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("Gemini API key is not configured");
   }
@@ -89,12 +89,13 @@ export async function generateAIResponse(message, historyOrInteractionId, user) 
     parts: [{ text: message }],
   });
 
-  // Fast, low-latency models with automatic fallback
+  // Fast, capable models with automatic fallback
   const candidateModels = [
+    ...(requestedModel ? [requestedModel] : []),
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
     "gemini-flash-lite-latest",
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash-lite",
-  ];
+  ].filter((val, idx, arr) => arr.indexOf(val) === idx);
 
   let lastError;
   for (const model of candidateModels) {
