@@ -336,7 +336,8 @@ input, textarea {
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.16) 0%, rgba(20, 18, 24, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.32);
   border-radius: var(--radius-sm);
   color: #ffffff;
   box-shadow: 0 4px 14px var(--accent-glow);
@@ -827,7 +828,8 @@ input, textarea {
   width: 34px;
   height: 34px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.16) 0%, rgba(20, 18, 24, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.32);
   color: #ffffff;
   box-shadow: 0 4px 14px var(--accent-glow);
   flex-shrink: 0;
@@ -1050,10 +1052,11 @@ input, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 68px;
-  height: 68px;
+  width: 72px;
+  height: 72px;
   border-radius: 20px;
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.22) 0%, rgba(18, 16, 22, 0.98) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
   color: #ffffff;
   box-shadow: 0 10px 32px var(--accent-glow), var(--shadow-glow);
   animation: floatIcon 3.5s ease-in-out infinite;
@@ -1955,10 +1958,11 @@ input, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.18) 0%, rgba(20, 18, 24, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
   color: #ffffff;
   box-shadow: 0 6px 20px var(--accent-glow);
 }
@@ -2420,7 +2424,8 @@ input, textarea {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.16) 0%, rgba(20, 18, 24, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.32);
   color: #ffffff;
   display: flex;
   align-items: center;
